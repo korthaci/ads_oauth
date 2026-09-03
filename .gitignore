@@ -1,0 +1,12 @@
+### --- SİSTEM & IDE DOSYALARI ---
+.env
+.vscode/
+.github/
+.agent/
+.htaccess
+*.code-workspace
+
+md/*
+
+### --- BAĞIMLILIKLAR ---
+vendor/
