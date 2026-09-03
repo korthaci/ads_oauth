@@ -6,7 +6,7 @@
 .htaccess
 *.code-workspace
 
-md/*
+#md/*
 
 ### --- BAĞIMLILIKLAR ---
 vendor/
