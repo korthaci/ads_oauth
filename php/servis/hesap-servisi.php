@@ -49,9 +49,11 @@ function google_aktif_baglantiyi_al(int $sahip_no): ?array
 /**
  * Kesfedilen hesaplari duplicate olusturmadan kaydeder.
  *
- * Ilk yeni gercek hesap, OAuth callback'in olusturdugu NULL harici kimlikli
- * placeholder kaydi kullanir. Diger yeni hesaplar mevcut sifreli refresh
- * token ile eklenir. Var olan hesaplarda refresh token kolonuna dokunulmaz.
+ * Ilk yeni gercek hesap, OAuth callback'in olusturdugu NULL harici kimlikli ve
+ * dolu sifreli refresh token tasiyan placeholder kaydi kullanir. Token icermeyen
+ * NULL harici kimlikli kayitlar placeholder olarak kullanilmaz. Diger yeni
+ * hesaplar mevcut sifreli refresh token ile eklenir. Var olan hesaplarda
+ * refresh token kolonuna dokunulmaz.
  *
  * @param array<int, array{
  *     harici_kimlik: string,
@@ -71,7 +73,7 @@ function google_kesfedilen_hesaplari_kaydet(
 
     try {
         $mevcut_sorgu = $baglanti->prepare(
-            'SELECT `no`, `harici_kimlik` '
+            'SELECT `no`, `harici_kimlik`, `refresh_token_sifreli` '
             . 'FROM `baglanmis_hesaplar` '
             . 'WHERE `sahip_no` = :sahip_no AND `platform` = :platform '
             . 'FOR UPDATE'
@@ -87,9 +89,14 @@ function google_kesfedilen_hesaplari_kaydet(
         foreach ($mevcut_sorgu->fetchAll() as $mevcut_hesap) {
             $mevcut_no = (int) $mevcut_hesap['no'];
             $harici_kimlik = $mevcut_hesap['harici_kimlik'];
+            $mevcut_refresh_token_sifreli = $mevcut_hesap['refresh_token_sifreli'];
 
             if ($harici_kimlik === null || (string) $harici_kimlik === '') {
-                if ($placeholder_no === null) {
+                if (
+                    $placeholder_no === null
+                    && $mevcut_refresh_token_sifreli !== null
+                    && (string) $mevcut_refresh_token_sifreli !== ''
+                ) {
                     $placeholder_no = $mevcut_no;
                 }
 

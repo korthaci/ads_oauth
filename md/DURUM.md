@@ -32,6 +32,9 @@ bilgilerinin DB'ye yazılması henüz tamamlanmadı.
 Google OAuth callback'i ile yeni bir Google bağlantısı oluşturmak; ardından
 `/api/index.php?islem=google-hesap-kesfet` çağrısını gerçek Google hesabıyla tekrar çalıştırmak.
 
+PROMPT-08.1 için bu dosyanın altındaki güvenlik notu geçerlidir. Bu prompt kapsamında Google
+Ads API, Developer Token veya OAuth callback tekrar çalıştırılmadı.
+
 ---
 
 ## 2. Tamamlanan Adımlar
@@ -176,6 +179,7 @@ Google OAuth callback'i ile yeni bir Google bağlantısı oluşturmak; ardından
 | 05 | PROMPT-05 — Google Ads PHP Client geçişi | Tamamlandı | `google/apiclient` kaldırıldı; `googleads/google-ads-php:^34.0` eklendi, `composer.lock`/`vendor/` güncellendi ve `GoogleAdsClient` autoload doğrulandı |
 | 07 | PROMPT-07 — Minimum Site Kullanıcısı Login/Register | Tamamlandı | `site_sahipleri` üzerinde register/login/logout, session fixation önleme, password hashing ve browser test akışı eklendi; Google OAuth yeniden yazılmadı |
 - [x] PROMPT-08 — Google Ads API İlk Bağlantı ve Hesap Keşfi | Uygulandı, gerçek API başarısız | `google-hesap-kesfet` action'ı, V25 GoogleAdsClient/CustomerService entegrasyonu, şifreli refresh token çözme, müşteri temel bilgi sorgusu ve duplicate önleyen DB kaydı eklendi. Gerçek testte `GOOGLE_DEVELOPER_TOKEN` boş olduğu için API çağrısı yapılmadı; müşteri hesabı keşfedilmedi. |
+| 08.1 | PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi | Uygulandı, canlı kayıt doğrulaması yapılamadı | Test cleanup için repo içinde silme mekanizması bulunmadı; hesap keşfi placeholder seçimi artık yalnızca dolu şifreli refresh token taşıyan gerçek OAuth kaydını kullanıyor. Google Ads API/OAuth tekrar çalıştırılmadı. |
 
 ### PROMPT-08 test sonucu ve veri durumu
 
@@ -186,6 +190,32 @@ Google OAuth callback'i ile yeni bir Google bağlantısı oluşturmak; ardından
 - Duplicate önleme mantığı için yapılan geçici test gerçek `sahip_no=6` OAuth placeholder kaydını kullandı; ilk ve ikinci kayıt sayısı aynı kaldı ancak test cleanup hatası bu gerçek kaydı sildi.
 - **Önemli veri durumu:** Test izolasyonu sırasında gerçek `sahip_no=6` OAuth placeholder kaydı hatalı cleanup sorgusuyla silindi. MySQL binary log'u kapalı ve yerel yedek/undo kaydı bulunamadığı için eski şifreli refresh token geri getirilemedi. Sahte veya boş token yazılmadı. `baglanmis_hesaplar` kaydı gerçek OAuth callback'i yeniden çalıştırılarak oluşturulmalıdır.
 - Bu nedenle PROMPT-08 için gerçek müşteri hesabı keşfi sonucu: **başarısız / gerçekleştirilemedi**; DB'de `harici_kimlik` ve `hesap_adi` doldurulmadı.
+
+### PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi
+
+- **Durum:** Uygulandı; canlı gerçek kayıt doğrulaması yapılamadı.
+- PROMPT-08 sırasında tespit edilen gerçek OAuth kaydının test cleanup tarafından silinebilmesi
+  problemi ele alındı. Repo içinde bu silmeyi yapan production/test `DELETE` sorgusu bulunmadı;
+  `api/hesap-sil.php` yalnızca iskelettir. Silme, önceki oturumdaki repo dışı geçici test
+  cleanup'ından kaynaklanmıştır.
+- Google hesap keşfi servisindeki placeholder adayları artık yalnızca `platform = 'google'`,
+  `harici_kimlik IS NULL`/boş ve `refresh_token_sifreli` dolu olan kayıtlar arasından seçilir.
+  Böylece gerçek OAuth placeholder kaydı korunur; token içermeyen test/boş kayıtlar gerçek
+  OAuth bağlantısı gibi kullanılmaz.
+- Genel veya `sahip_no` değerine bağlı cleanup eklenmedi. Mevcut gerçek kayıtlara yönelik
+  `DELETE`, refresh token sıfırlama/değiştirme veya test yazma işlemi yapılmadı.
+- Projede ayrı PHPUnit/Pest/test cleanup dosyası bulunmadığından yeni DB test dosyası eklenmedi.
+  Test altyapısı oluşturulmadan gerçek kullanıcı verisiyle test yapılmadı.
+- Senaryo A: Canlı doğrulama yapılamadı; önceki olay nedeniyle mevcut DB'de korunacak kayıt
+  bulunmuyor. Kod koşulu, dolu refresh token şartını içeriyor.
+- Senaryo B: Canlı DB'de test kaydı oluşturulmadı veya silinmedi; bu nedenle mevcut test verisi
+  sayısı `0` ve production verisine dokunulmadı.
+- Senaryo C/D: Google Ads API çağrısı yapılmadan servis kodu incelendi; duplicate/placeholder
+  mantığı mevcut transaction ve token-korumalı placeholder koşuluyla bırakıldı.
+- **Google Ads API bu prompt kapsamında tekrar test edilmedi.** `GOOGLE_DEVELOPER_TOKEN`
+  kontrol edilmedi, `listAccessibleCustomers()` ve `GoogleAdsService::search()` çalıştırılmadı.
+- **DB şeması değişmedi.** OAuth callback, login/register, session, şifreleme, Composer ve
+  Meta OAuth dosyaları değiştirilmedi.
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*
