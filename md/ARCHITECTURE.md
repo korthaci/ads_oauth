@@ -18,6 +18,75 @@ API üzerinden otomatik yapar ve durumu/metrikleri basit bir panelde gösterir.
 
 ---
 
+## 1.1. Temel Ürün Felsefesi — Platform Karmaşıklığı Kullanıcıya Ait Değildir
+
+Bu sistemin temel amacı, Google Ads ve Meta reklam platformlarının karmaşık yönetim arayüzlerini kullanıcıya yeniden sunmak değildir.
+
+**Platform karmaşıklığı kullanıcıya değil, sisteme aittir.**
+
+Kullanıcıdan yalnızca reklam oluşturmak için gerekli olan ve insan tarafından kolayca anlaşılabilecek bilgiler alınmalıdır. Kullanıcı, Google Ads veya Meta'nın teknik kampanya yapısını bilmek zorunda olmamalıdır.
+
+Kullanıcı arayüzü mümkün olduğunca az sayıda ve anlaşılır kontrol üzerine kurulmalıdır. Bunlar ihtiyaca göre `input`, `textarea`, `select`, basit seçim bileşenleri, tarih/bütçe alanları ve gerektiğinde görsel yükleme gibi kontroller olabilir.
+
+Örneğin kullanıcıdan şu tür bilgiler alınabilir:
+
+* Web sitesi
+* Reklam başlıkları
+* Reklam metinleri
+* Anahtar kelimeler
+* Günlük/toplam bütçe
+* Reklamın yayınlanacağı ülke, bölge veya şehir
+* Hedef kitleyle ilgili basit bilgiler
+* Platformun gerçekten gerektirdiği diğer temel bilgiler
+
+Buna karşılık Google Ads veya Meta'nın aşağıdaki gibi teknik yapıları kullanıcı arayüzüne doğrudan yansıtılmamalıdır:
+
+* Campaign / Campaign Budget
+* Ad Group
+* Ad / Asset yapıları
+* Teknik bidding stratejileri
+* Platforma özgü ID ve criterion yapıları
+* API'ye özgü teknik parametreler
+* Kullanıcının reklam vermesi için bilmesine gerek olmayan diğer platform ayarları
+
+Platform API'si bir işlemi gerçekleştirmek için çok sayıda teknik parametre gerektiriyorsa öncelikli soru:
+
+**“Bu ayarları kullanıcıya nasıl gösterebiliriz?” değil, “Bu teknik gereksinimi kullanıcıya göstermeden sistem içinde nasıl yönetebiliriz?” olmalıdır.**
+
+Mümkün olduğunda teknik değerler sistem tarafından türetilmeli, güvenli varsayılanlar kullanılmalı veya birden fazla teknik seçenek kullanıcı açısından tek ve anlaşılır bir seçeneğe dönüştürülmelidir.
+
+Örneğin kullanıcı:
+
+> “Ankara'da günde 500 TL bütçeyle bu hizmetimin reklamını yapmak istiyorum.”
+
+diyebilmelidir. Kullanıcının bu isteği gerçekleştirmek için Google Ads'in kampanya, reklam grubu, bütçe, location criterion, bidding veya benzeri teknik kavramlarını bilmesi beklenmemelidir.
+
+Kullanıcı arayüzüne yeni bir teknik seçenek ancak şu durumda eklenmelidir:
+
+1. İşlemi gerçekleştirmek için gerçekten gerekli olması,
+2. Kullanıcı açısından anlaşılır şekilde ifade edilebilmesi,
+3. Kullanıcı deneyimini gereksiz şekilde karmaşıklaştırmaması.
+
+**Google Ads veya Meta'nın kendi arayüzündeki ayar sayısını veya karmaşıklığını taklit etmek bu projenin hedefi değildir.**
+
+Bu prensip yalnızca frontend için değil, tüm sistem mimarisi için geçerlidir. Backend ve adapter katmanları, kullanıcıdan alınan sade bilgileri ilgili reklam platformunun gerektirdiği teknik yapılara dönüştürmekten sorumludur.
+
+### Minimum Kullanıcı Bilgisi İlkesi
+
+Bir reklamın oluşturulabilmesi için platform tarafından zorunlu tutulan her teknik alanın kullanıcı tarafından manuel olarak doldurulması şart değildir.
+
+Öncelik sırası:
+
+1. Kullanıcıdan temel ve anlaşılır bilgi alınır.
+2. Sistem gerekli teknik değerleri mümkün olduğunca kendisi oluşturur veya türetir.
+3. Platformun zorunlu tuttuğu ancak kullanıcı tarafından sağlanması gereken bir bilgi varsa kullanıcıya sade bir biçimde sorulur.
+4. Kullanıcının bilmesine gerek olmayan teknik ayrıntılar arayüzde gösterilmez.
+
+Bu nedenle proje geliştirilirken **“Google/Meta API bunu istiyor” tek başına bir UI alanı ekleme gerekçesi değildir.**
+
+Her yeni kullanıcı alanı için, bu bilginin kullanıcıdan neden alınması gerektiği ayrıca değerlendirilmelidir.
+
+
 ## 2. Çalışma Modeli (Roller)
 
 | Rol | Kim | Görev |
