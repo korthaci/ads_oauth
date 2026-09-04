@@ -19,10 +19,12 @@
 
 **Aşama:** PROMPT 00 (iskelet kurulum), PROMPT 01 (isimlendirme düzeltmesi + autoload kaldırma),
 PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü) ve PROMPT 03 (Google öncelikli
-temel altyapı) tamamlandı.
+temel altyapı) tamamlandı. `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu;
+Google/Meta anahtarları ile Composer bağımlılık kurulumu henüz yapılmadı.
 
 **Sıradaki adım:** Google OAuth akışı için hazırlanacak bir sonraki prompt bekleniyor. Temel
-altyapı tamamlandı; OAuth, bağlayıcı, servis ve panel/tema mantığı henüz yazılmadı.
+altyapı tamamlandı; OAuth, bağlayıcı, servis ve panel/tema mantığı henüz yazılmadı. Google ve
+Meta anahtarları alınacak, ardından gerekli Composer bağımlılıkları kurulacak.
 
 ---
 
@@ -48,11 +50,15 @@ altyapı tamamlandı; OAuth, bağlayıcı, servis ve panel/tema mantığı henü
       ve dosya adlarının küçük harfli son hali doğrulandı; ek yeniden adlandırma gerekmedi.
 - [x] PROMPT 03 uygulandı: `db/sema.sql` oluşturuldu, temel config/veritabanı/oturum/şifreleme
       mantığı yazıldı ve `.env.sample` içindeki `DB_NAME` değeri `ads_oauth` olarak ayarlandı.
+- [x] Gerçek `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu.
 
 ## 3. Bekleyen / Henüz Yapılmayanlar
 
 - [ ] Google Ads API Developer Token başvurusu (Kort tarafında yapılacak).
+- [ ] Google OAuth anahtarlarının (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) alınması.
 - [ ] Meta Marketing API App Review süreci (Kort tarafında yapılacak).
+- [ ] Meta OAuth anahtarlarının (`META_APP_ID`, `META_APP_SECRET`) alınması.
+- [ ] Composer bağımlılıklarının kurulması ve `vendor/` klasörünün oluşturulması.
 - [ ] OAuth akışı prompt dosyalarının yazılması (`php/oauth/google-oauth.php`, `php/oauth/meta-oauth.php`).
 - [ ] Baglayici (adapter) katmanı prompt dosyalarının yazılması.
 - [ ] Servis katmanı prompt dosyalarının yazılması.
@@ -73,6 +79,8 @@ altyapı tamamlandı; OAuth, bağlayıcı, servis ve panel/tema mantığı henü
 | 2026-09-04 | PROMPT 02 ile `php/` altındaki tüm adlandırmaların küçük harfli son hali doğrulandı | PROMPT 01'in devamı/düzeltmesi; ek yeniden adlandırma gerekmedi |
 | 2026-09-04 | Nihai hedef çoklu platform olsa da geliştirme sıralı ilerleyecek; önce Google Ads altyapısı tamamlanacak | Meta daha sonra eklenecek, bu aşamada yalnızca `google` platform değeri kullanılacak |
 | 2026-09-04 | DB engine olarak InnoDB seçildi | Foreign key desteği ve şifreli token'ların transactional bütünlüğü gerekiyor |
+| 2026-09-04 | Gerçek `.env` dosyası DB bilgileriyle oluşturuldu | Yerel veritabanı bağlantı ayarları hazırlandı; hassas değerler repora yazılmayacak |
+| 2026-09-04 | Google ve Meta anahtarları ile Composer bağımlılıkları henüz alınmadı/kurulmadı | OAuth ve üçüncü parti SDK entegrasyonları sonraki aşamaya bırakıldı |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
 
