@@ -1,0 +1,1 @@
+<!-- Ortak sayfa basligi. DURUM: Iskelet. -->

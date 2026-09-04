@@ -1,0 +1,13 @@
+{
+    "name": "kort/ads_oauth",
+    "description": "Reklam kurulumunu basitletiren bagimsiz sistem",
+    "type": "project",
+    "require": {
+        "php": ">=8.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ads\\": "php/"
+        }
+    }
+}

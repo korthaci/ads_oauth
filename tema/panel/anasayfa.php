@@ -1,0 +1,1 @@
+<!-- Giris sonrasi genel durum ekrani. DURUM: Iskelet. -->

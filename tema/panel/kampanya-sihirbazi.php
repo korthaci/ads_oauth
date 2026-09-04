@@ -1,0 +1,1 @@
+<!-- Basit kurulum formu. DURUM: Iskelet. -->

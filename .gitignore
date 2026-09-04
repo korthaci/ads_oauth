@@ -3,7 +3,6 @@
 .vscode/
 .github/
 .agent/
-.htaccess
 *.code-workspace
 
 #md/*
