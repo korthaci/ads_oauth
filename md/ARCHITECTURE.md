@@ -72,25 +72,25 @@ ads_oauth/
 │   └── senkron-tetikle.php
 │
 ├── php/
-│   ├── Config.php
-│   ├── Veritabani.php
-│   ├── Oturum.php
-│   ├── Sifreleme.php
+│   ├── config.php
+│   ├── veritabani.php
+│   ├── oturum.php
+│   ├── sifreleme.php
 │   │
-│   ├── Oauth/
-│   │   ├── GoogleOauth.php
-│   │   └── MetaOauth.php
+│   ├── oauth/
+│   │   ├── google-oauth.php
+│   │   └── meta-oauth.php
 │   │
-│   ├── Baglayici/
-│   │   ├── GoogleAdsBaglayici.php
-│   │   └── MetaAdsBaglayici.php
+│   ├── baglayici/
+│   │   ├── google-ads-baglayici.php
+│   │   └── meta-ads-baglayici.php
 │   │
-│   ├── Servis/
-│   │   ├── KampanyaServisi.php
-│   │   ├── SenkronServisi.php
-│   │   └── HesapServisi.php
+│   ├── servis/
+│   │   ├── kampanya-servisi.php
+│   │   ├── senkron-servisi.php
+│   │   └── hesap-servisi.php
 │   │
-│   └── Cron/
+│   └── cron/
 │       └── senkron-calistir.php
 │
 ├── tema/
@@ -127,7 +127,15 @@ ads_oauth/
 
 ## 6. Genel Konvansiyonlar
 
-- Dosya/fonksiyon isimlendirmesi: Türkçe, eylem bazlı (`kampanya-olustur.php`, `hesap-sil.php`).
+- Dosya/fonksiyon isimlendirmesi: Türkçe, eylem bazlı, **tamamen küçük harf, tire ile ayrılmış**
+  (`kampanya-olustur.php`, `hesap-sil.php`, `google-oauth.php`). Class dosyaları da bu kurala
+  uyar — class'ın kendisi PHP konvansiyonuna göre PascalCase yazılabilir (`class GoogleOauth`),
+  ama dosya adı küçük harf kalır (`google-oauth.php`).
+- **Autoload stratejisi:** Kendi class'larımız için Composer PSR-4 autoload **kullanılmaz**
+  (dosya adı küçük harf + class adı PascalCase uyuşmazlığı, Linux sunucuda case-sensitivity
+  sorunu yaratır). Bunun yerine Websistem'deki gibi merkezi bir `require_once` zinciri kullanılır
+  (örn. `php/config.php` üstünde gerekli dosyaları manuel include eder). Composer/PSR-4,
+  sadece üçüncü parti paketler (`google-ads-php`, `facebook-business-sdk`) için kullanılır.
 - `api/` altındaki her dosya JSON döner. **Websistem konvansiyonuyla uyumlu format** (Kort'un alışık olduğu):
   `echo json_encode(['return' => 1, 'mesaj' => 'İşlem başarılı']);` (başarı, `return: 1`)
   `echo json_encode(['return' => 0, 'mesaj' => 'Hata açıklaması']);` (hata, `return: 0`)
