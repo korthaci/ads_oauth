@@ -18,13 +18,13 @@
 ## 1. Şu An Neredeyiz?
 
 **Aşama:** PROMPT 00 (iskelet kurulum), PROMPT 01 (isimlendirme düzeltmesi + autoload kaldırma),
-PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü) ve PROMPT 03 (Google öncelikli
-temel altyapı) tamamlandı. `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu;
-Google/Meta anahtarları ile Composer bağımlılık kurulumu henüz yapılmadı.
+PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü), PROMPT 03 (Google öncelikli
+temel altyapı) ve PROMPT 04 (Composer/vendor altyapısı) tamamlandı. `.env` dosyası oluşturuldu
+ve veritabanı bilgileriyle dolduruldu; Google/Meta anahtarları henüz alınmadı.
 
 **Sıradaki adım:** Google OAuth akışı için hazırlanacak bir sonraki prompt bekleniyor. Temel
 altyapı tamamlandı; OAuth, bağlayıcı, servis ve panel/tema mantığı henüz yazılmadı. Google ve
-Meta anahtarları alınacak, ardından gerekli Composer bağımlılıkları kurulacak.
+Meta anahtarları alınacak; Google OAuth için gerekli `google/apiclient` paketi kurulmuş durumda.
 
 ---
 
@@ -51,6 +51,8 @@ Meta anahtarları alınacak, ardından gerekli Composer bağımlılıkları kuru
 - [x] PROMPT 03 uygulandı: `db/sema.sql` oluşturuldu, temel config/veritabanı/oturum/şifreleme
       mantığı yazıldı ve `.env.sample` içindeki `DB_NAME` değeri `ads_oauth` olarak ayarlandı.
 - [x] Gerçek `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu.
+- [x] PROMPT 04 uygulandı: `google/apiclient` kuruldu, `vendor/` ve `vendor/autoload.php`
+      oluşturuldu; Google OAuth akışı henüz yazılmadı.
 
 ## 3. Bekleyen / Henüz Yapılmayanlar
 
@@ -58,7 +60,6 @@ Meta anahtarları alınacak, ardından gerekli Composer bağımlılıkları kuru
 - [ ] Google OAuth anahtarlarının (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) alınması.
 - [ ] Meta Marketing API App Review süreci (Kort tarafında yapılacak).
 - [ ] Meta OAuth anahtarlarının (`META_APP_ID`, `META_APP_SECRET`) alınması.
-- [ ] Composer bağımlılıklarının kurulması ve `vendor/` klasörünün oluşturulması.
 - [ ] OAuth akışı prompt dosyalarının yazılması (`php/oauth/google-oauth.php`, `php/oauth/meta-oauth.php`).
 - [ ] Baglayici (adapter) katmanı prompt dosyalarının yazılması.
 - [ ] Servis katmanı prompt dosyalarının yazılması.
@@ -80,7 +81,7 @@ Meta anahtarları alınacak, ardından gerekli Composer bağımlılıkları kuru
 | 2026-09-04 | Nihai hedef çoklu platform olsa da geliştirme sıralı ilerleyecek; önce Google Ads altyapısı tamamlanacak | Meta daha sonra eklenecek, bu aşamada yalnızca `google` platform değeri kullanılacak |
 | 2026-09-04 | DB engine olarak InnoDB seçildi | Foreign key desteği ve şifreli token'ların transactional bütünlüğü gerekiyor |
 | 2026-09-04 | Gerçek `.env` dosyası DB bilgileriyle oluşturuldu | Yerel veritabanı bağlantı ayarları hazırlandı; hassas değerler repora yazılmayacak |
-| 2026-09-04 | Google ve Meta anahtarları ile Composer bağımlılıkları henüz alınmadı/kurulmadı | OAuth ve üçüncü parti SDK entegrasyonları sonraki aşamaya bırakıldı |
+| 2026-09-04 | Google ve Meta anahtarları henüz alınmadı; Google OAuth için `google/apiclient` kuruldu | OAuth ve API entegrasyonları sonraki aşamaya bırakıldı |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
 
@@ -95,6 +96,7 @@ Meta anahtarları alınacak, ardından gerekli Composer bağımlılıkları kuru
 | 01 | `md/01-isimlendirme-duzeltme.md` | Tamamlandı | `php/` altındaki adlar küçültüldü, Composer PSR-4 `autoload` bloğu kaldırıldı |
 | 02 | PROMPT 01 devamı/düzeltmesi | Tamamlandı | `php/` altındaki tüm klasör ve dosya adlarının küçük harfli son hali doğrulandı; ek yeniden adlandırma gerekmedi |
 | 03 | `md/03-temel-altyapi.md` | Tamamlandı | İlk SQL şeması ve Google öncelikli temel altyapı fonksiyonları eklendi |
+| 04 | PROMPT-04 — Composer / Vendor Altyapısının Kurulması | Tamamlandı | `google/apiclient` kuruldu; `vendor/autoload.php` doğrulandı. OAuth akışı henüz yazılmadı |
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*
