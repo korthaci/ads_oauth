@@ -5,7 +5,7 @@
 > **Güncelleme sorumluluğu kod yazıcı AI'ye (Cline/Requesty) aittir.** Claude bu dosyayı
 > artık düzenlemez, sadece yeni prompt hazırlarken referans olarak okur.
 
-**Son güncelleme:** 2026-09-03
+**Son güncelleme:** 2026-09-04
 
 **Proje adı:** ads_oauth *(eski adı "ads" idi — arama motorlarında/genel aramalarda "ads" kelimesi çok geçtiği için değiştirildi)*
 **Proje yolu:** `c:/server/htdocs/ads_oauth/`
@@ -17,12 +17,10 @@
 
 ## 1. Şu An Neredeyiz?
 
-**Aşama:** Planlama tamamlandı, PROMPT 00 (iskelet kurulum) hazırlandı, henüz AI'ye verilmedi.
+**Aşama:** PROMPT 00 (iskelet kurulum) ve PROMPT 01 (isimlendirme düzeltmesi + autoload kaldırma) tamamlandı.
 
-**Sıradaki adım:** `prompts/00-iskelet-kurulum.md` dosyası Cline'a verilip klasör/dosya
-iskeleti oluşturulacak. Bu adım tamamen mekanik olduğu için ucuz/küçük bir model yeterli.
-Ardından `Config.php`, `Veritabani.php`, `.env` gerçek mantığı için PROMPT 01 hazırlanacak
-(bu, daha güçlü bir model gerektirebilir).
+**Sıradaki adım:** Gerçek uygulama mantığı yazılmadan önce hazırlanacak bir sonraki prompt
+bekleniyor. Mevcut yapı yalnızca klasör/dosya iskeleti ve docblock yorumlarından oluşuyor.
 
 ---
 
@@ -41,13 +39,16 @@ Ardından `Config.php`, `Veritabani.php`, `.env` gerçek mantığı için PROMPT
 - [x] Dosya yapısı taslağı çıkarıldı (bkz. ARCHITECTURE.md, ~34 dosya, SQL hariç).
 - [x] Çalışma yöntemi belirlendi: genel mimari dosyası + ihtiyaç oldukça tek tek prompt +
       bu durum takip dosyası.
+- [x] PROMPT 00 uygulandı: klasör/dosya iskeleti oluşturuldu, gerçek mantık eklenmedi.
+- [x] PROMPT 01 uygulandı: `php/` altındaki klasör ve dosya adları küçük harfe çevrildi;
+      `composer.json` içindeki PSR-4 `autoload` bloğu kaldırıldı.
 
 ## 3. Bekleyen / Henüz Yapılmayanlar
 
 - [ ] Google Ads API Developer Token başvurusu (Kort tarafında yapılacak).
 - [ ] Meta Marketing API App Review süreci (Kort tarafında yapılacak).
 - [ ] SQL şema dosyasının hazırlanması (`db/sema.sql`).
-- [ ] İlk prompt dosyasının yazılması (temel altyapı: Config, Veritabani, Oturum, .env).
+- [ ] Temel altyapı mantığının yazılması (Config, Veritabani, Oturum, .env).
 - [ ] OAuth akışı prompt dosyalarının yazılması (GoogleOauth.php, MetaOauth.php).
 - [ ] Baglayici (adapter) katmanı prompt dosyalarının yazılması.
 - [ ] Servis katmanı prompt dosyalarının yazılması.
@@ -63,6 +64,8 @@ Ardından `Config.php`, `Veritabani.php`, `.env` gerçek mantığı için PROMPT
 | 2026-09-03 | Türkçe eylem-bazlı dosya isimlendirmesi korundu | Kort'un mevcut proje konvansiyonuyla tutarlılık |
 | 2026-09-03 | Claude kodu doğrudan düzenlemez, düzeltme promptu yazar | Kod stili tutarlılığı, tek AI üzerinden kod yazımı korunur |
 | 2026-09-04 | api/ JSON formatı `{return, mesaj}` olarak belirlendi | Websistem `php/class_f/` ve `api/` koduna bakılarak netleştirildi (Kort'un alışık olduğu format) |
+| 2026-09-04 | `php/` altındaki klasör ve dosya adları küçük harfe çevrildi | Dosya yolu tutarlılığı ve platformlar arası adlandırma uyumu |
+| 2026-09-04 | Kendi sınıfları için Composer PSR-4 autoload kullanılmamasına karar verildi | Manuel `require_once` stratejisi kullanılacak |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
 
@@ -74,7 +77,8 @@ Ardından `Config.php`, `Veritabani.php`, `.env` gerçek mantığı için PROMPT
 
 | # | Dosya | Durum | Not |
 |---|---|---|---|
-| 00 | `prompts/00-iskelet-kurulum.md` | Hazır, AI'ye verilmedi | Tamamen mekanik, ucuz model yeterli - sadece klasör/dosya + docblock oluşturur, mantık yok |
+| 00 | `md/00-iskelet-kurulum.md` | Tamamlandı | Sadece klasör/dosya + docblock oluşturuldu, mantık eklenmedi |
+| 01 | `md/01-isimlendirme-duzeltme.md` | Tamamlandı | `php/` altındaki adlar küçültüldü, Composer PSR-4 `autoload` bloğu kaldırıldı |
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*
