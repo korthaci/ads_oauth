@@ -14,7 +14,6 @@ API üzerinden otomatik yapar ve durumu/metrikleri basit bir panelde gösterir.
 
 **Bu sistem değildir:**
 - Bir reklam ajansı aracı değildir (kullanıcı adına para akışına dahil olunmaz).
-- Websistem'in (Kort'un mevcut CMS'i) bir modülü değildir — **bağımsız, platformdan bağımsız** çalışır.
 - Otomatik itiraz/dispute çözücü değildir (bu kısım destek şablonu üretmekle sınırlı).
 
 ---
@@ -23,13 +22,15 @@ API üzerinden otomatik yapar ve durumu/metrikleri basit bir panelde gösterir.
 
 | Rol | Kim | Görev |
 |---|---|---|
-| Spec yazarı | Claude (bu sohbet) | Mimari kararları verir, `.md` prompt dosyalarını hazırlar, DURUM.md'yi günceller |
+| Spec yazarı | Claude (bu sohbet) | Mimari kararları verir, `.md` prompt dosyalarını ve düzeltme promptlarını hazırlar |
 | Kimlik/erişim sorumlusu | Kort | Google/Meta geliştirici hesapları, OAuth client_id/secret, API erişim başvuruları, `.env` doldurma |
-| Kod yazıcı | VS Code + AI (Claude Code veya benzeri) | Prompt dosyalarını okuyup gerçek kod dosyalarını yazar |
+| Kod yazıcı | VS Code + AI (Cline/Requesty) | Prompt dosyalarını okuyup gerçek kod dosyalarını yazar, **her görev sonunda `DURUM.md`'yi kendisi günceller** |
 
 **Kritik kural:** Kod yazıcı AI, her oturuma başlarken önce `DURUM.md` dosyasını, sonra bu
 `ARCHITECTURE.md` dosyasını, sonra o anki görev prompt dosyasını okumalıdır. Bu sıralama
-context sıfırlansa bile kaldığı yerden devam edebilmeyi sağlar.
+context sıfırlansa bile kaldığı yerden devam edebilmeyi sağlar. Görev bittiğinde **DURUM.md'yi
+güncellemek de kod yazıcı AI'nin sorumluluğudur** — Claude bu dosyayı artık düzenlemez, sadece
+okur (yeni prompt hazırlarken mevcut durumu anlamak için).
 
 **Kod inceleme/düzeltme akışı:** Claude (spec yazarı) mevcut kodu **doğrudan düzenlemez.**
 Repo'dan ilgili dosyayı okur, sorunu/eksiği tespit eder, kod yazıcı AI'ye yönelik **düzeltme
@@ -43,7 +44,7 @@ Claude sadece yönlendirici/denetleyici rolünde kalır.
 ## 3. Teknoloji Yığını
 
 - **Backend:** Native PHP (framework yok), Composer ile bağımlılık yönetimi
-- **Veritabanı:** MySQL
+- **Veritabanı:** MySQL (Kort'un mevcut altyapısıyla uyumlu)
 - **Frontend:** Vanilla HTML/CSS/JavaScript (framework yok)
 - **Üçüncü parti SDK'lar:**
   - `googleads/google-ads-php` (Google Ads API)
@@ -55,7 +56,7 @@ Claude sadece yönlendirici/denetleyici rolünde kalır.
 ## 4. Dosya Yapısı (Hedef)
 
 ```
-proje-koku/
+ads_oauth/
 ├── index.php
 ├── composer.json
 ├── .env.sample
@@ -127,7 +128,14 @@ proje-koku/
 ## 6. Genel Konvansiyonlar
 
 - Dosya/fonksiyon isimlendirmesi: Türkçe, eylem bazlı (`kampanya-olustur.php`, `hesap-sil.php`).
-- `api/` altındaki her dosya JSON döner: `{ "basarili": true/false, "veri": {...}, "hata": null|"mesaj" }`
+- `api/` altındaki her dosya JSON döner. **Websistem konvansiyonuyla uyumlu format** (Kort'un alışık olduğu):
+  `echo json_encode(['return' => 1, 'mesaj' => 'İşlem başarılı']);` (başarı, `return: 1`)
+  `echo json_encode(['return' => 0, 'mesaj' => 'Hata açıklaması']);` (hata, `return: 0`)
+  Ek veri döndürmek gerektiğinde aynı diziye ekstra anahtar eklenir (örn. `['return' => 1, 'mesaj' => '...', 'kampanya_id' => 123]`), ayrı bir "veri" objesi içine sarılmaz.
+- Her `api/` dosyasının başında doğrudan erişim engeli olmalı: dosya sadece `api/index.php`
+  üzerinden çağrılabilmeli, tarayıcıdan direkt istekle açılamamalı (Websistem'deki
+  `if (!defined('otoban')) exit;` benzeri bir koruma — bu projede kullanılacak sabit adı
+  ayrı bir promptta netleştirilecek).
 - Hassas veriler (refresh token) `Sifreleme.php` üzerinden şifreli saklanır, asla düz metin değil.
 - Her yeni dosya, hangi katmana ait olduğunu ve hangi dosyaları çağırdığını üstte kısa bir yorum ile belirtir.
 - `.env` dosyasında: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DEVELOPER_TOKEN`, `META_APP_ID`, `META_APP_SECRET`, `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `SIFRELEME_ANAHTARI`.

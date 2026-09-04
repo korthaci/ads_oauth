@@ -5,8 +5,8 @@
 > başka dosya/klasör önerme. Sadece aşağıdaki listeyi uygula.
 
 ## Proje Bilgisi
-- Proje adı: `ads`
-- Proje kök yolu: `c:/server/htdocs/ads/`
+- Proje adı: `ads_oauth`
+- Proje kök yolu: `c:/server/htdocs/ads_oauth/`
 - Bu kök yol altında aşağıdaki yapıyı oluştur.
 
 ## Yapılacaklar (sırayla)
@@ -28,7 +28,7 @@
 **`composer.json`**
 ```json
 {
-    "name": "kort/ads",
+    "name": "kort/ads_oauth",
     "description": "Reklam kurulumunu basitletiren bagimsiz sistem",
     "type": "project",
     "require": {
