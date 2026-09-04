@@ -21,11 +21,12 @@
 PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü), PROMPT 03 (Google öncelikli
 temel altyapı), PROMPT 04 (Composer/vendor altyapısı) ve PROMPT 05 (Google Ads PHP client
 geçişi) tamamlandı. `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu;
-Google/Meta anahtarları henüz alınmadı.
+Google OAuth client ayarları `.env` üzerinden okunuyor; Google Cloud redirect ayarının gerçek
+ortamda doğrulanması henüz yapılmadı.
 
-**Sıradaki adım:** Google OAuth akışı için hazırlanacak bir sonraki prompt bekleniyor. Temel
-altyapı tamamlandı; OAuth, bağlayıcı, servis ve panel/tema mantığı henüz yazılmadı. Google ve
-Meta anahtarları alınacak; Google Ads PHP client (`googleads/google-ads-php:^34.0`) kuruldu ve
+**Sıradaki adım:** Google Cloud redirect ayarını ve gerçek kullanıcı callback'ini doğrulamak,
+ardından bağlayıcı/servis katmanlarına geçmek. Google Ads PHP client
+(`googleads/google-ads-php:^34.0`) kuruldu ve
 `vendor/autoload.php` üzerinden `Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient` yüklemesi
 doğrulandı.
 
@@ -60,6 +61,50 @@ doğrulandı.
       eklendi; Composer bağımlılıkları yeniden çözüldü, `composer.lock` ve `vendor/` güncellendi.
       Google Ads PHP client'ın `vendor/autoload.php` üzerinden yüklenmesi doğrulandı; PHP
       `8.2.12` olarak kontrol edildi. OAuth koduna ve DB dosyalarına dokunulmadı.
+- [x] PROMPT 06 Revize tamamlandı: OAuth HTTP girişi yalnızca `api/index.php` üzerinden
+      `oauth-baslat` ve `oauth-donus` action'larıyla çalışacak şekilde eklendi; yeni OAuth HTTP
+      endpoint dosyası oluşturulmadı.
+
+## 2.1. PROMPT-06 Revize Sonucu
+
+- **PROMPT 06 Revize tamamlandı mı?** Evet. Değişen dosyalar:
+  `api/index.php`, `php/oauth/google-oauth.php` ve bu durum kaydı olan `md/DURUM.md`.
+  `api/oauth-baslat.php` ile `api/oauth-donus.php` mevcut iskelet dosyalarıdır; bu görevde
+  oluşturulmadı, değiştirilmedi ve dispatch için kullanılmıyor.
+- **OAuth başlangıç akışı:** Giriş yapılmış session'daki `sahip_no` kontrol edilir; 32 byte
+  `random_bytes()` state üretilip session'a yazılır; Google Ads scope, `offline` erişim ve
+  `consent` prompt ile authorization URL JSON response içinde döner.
+- **OAuth callback akışı:** `sahip_no`, state ve code/error parametreleri kontrol edilir.
+  Doğrulanan state token exchange'den önce session'dan silinir. Authorization code, mevcut
+  Composer paketindeki `Google\Auth\OAuth2` ile token'a çevrilir ve refresh token zorunlu
+  tutulur. Google Ads PHP client'ın mevcut `OAuth2TokenBuilder` sınıfı refresh-token
+  credential'ının kurulabilirliğini doğrulamak için kullanılır; Google Ads API çağrısı yapılmaz.
+- **State/CSRF durumu:** State session'da tutulur, `hash_equals()` ile karşılaştırılır,
+  geçersiz state reddedilir ve doğrulanmış state tek kullanımlık olarak tüketilir.
+- **Refresh token şifreleme durumu:** Refresh token yalnızca mevcut `sifrele()` mekanizmasıyla
+  AES-256-CBC ciphertext'e dönüştürülür; access token kalıcı yazılmaz. Token response'a,
+  HTML'e veya log'a eklenmez.
+- **Database kayıt durumu:** Mevcut `baglanmis_hesaplar` tablosu kullanılır; `sahip_no` session
+  kullanıcısından, `platform` `google` değerinden alınır. `harici_kimlik` NULL bırakılır;
+  mevcut Google kaydı varsa güncellenir, yoksa eklenir. Gerçek DB insert/update testi aşağıdaki
+  gerçek Google callback'i ve refresh token olmadığı için çalıştırılmadı; PDO veritabanı bağlantı
+  kontrolü başarılıdır.
+- **Local OAuth test sonucu:** PHP syntax kontrolü, Composer autoload ve `OAuth2TokenBuilder`
+  sınıfı kontrolü başarılıdır. CLI davranış testinde authorization URL, scope, offline/consent,
+  sabit redirect URI, session state, geçersiz state reddi, state tüketimi ve şifreleme round-trip'i
+  doğrulandı. PHP built-in server üzerinden `api/index.php?islem=oauth-baslat` isteği JSON
+  standardında unauthenticated hata döndürdü. Vendor dışı 27 PHP dosyasının lint kontrolü başarılıdır.
+- **Hata/engel:** Gerçek Google authorization code callback'i ve refresh token alışverişi,
+  Google Cloud'da aktif kullanıcı onayı/redirect ayarı olmadan çalıştırılamaz. Kullanılan ve
+  Google Cloud OAuth client üzerinde birebir Authorized redirect URI olarak tanımlanması gereken
+  URI şudur: `http://localhost/ads_oauth/api/index.php?islem=oauth-donus`. Mevcut çalışma
+  ortamında gerçek Google authorization code bulunmadığı için gerçek `baglanmis_hesaplar` kaydı ve
+  veritabanındaki gerçek ciphertext doğrulanamadı; PDO bağlantısı başarılıdır. Google Cloud ayarı
+  bu çalışma kapsamında değiştirilmedi.
+- **Sonraki adım:** Google Cloud Authorized redirect URI'yi yukarıdaki değerle doğrula, giriş
+  yapılmış local session ile gerçek OAuth akışını tamamla, DB'deki `refresh_token_sifreli`
+  değerini plaintext olmayan ciphertext olarak doğrula; ardından bağlayıcı ve servis katmanına
+  geç.
 
 ## 3. Bekleyen / Henüz Yapılmayanlar
 
@@ -67,7 +112,8 @@ doğrulandı.
 - [ ] Google OAuth anahtarlarının (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) alınması.
 - [ ] Meta Marketing API App Review süreci (Kort tarafında yapılacak).
 - [ ] Meta OAuth anahtarlarının (`META_APP_ID`, `META_APP_SECRET`) alınması.
-- [ ] OAuth akışı prompt dosyalarının yazılması (`php/oauth/google-oauth.php`, `php/oauth/meta-oauth.php`).
+- [x] Google OAuth akışı (`php/oauth/google-oauth.php`) ve `api/index.php` dispatch'i tamamlandı;
+      Meta OAuth hâlâ yazılmadı.
 - [ ] Baglayici (adapter) katmanı prompt dosyalarının yazılması.
 - [ ] Servis katmanı prompt dosyalarının yazılması.
 - [ ] Cron/senkron mekanizmasının prompt dosyasının yazılması.
