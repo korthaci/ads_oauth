@@ -19,16 +19,18 @@
 
 **Aşama:** PROMPT 00 (iskelet kurulum), PROMPT 01 (isimlendirme düzeltmesi + autoload kaldırma),
 PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü), PROMPT 03 (Google öncelikli
-temel altyapı), PROMPT 04 (Composer/vendor altyapısı) ve PROMPT 05 (Google Ads PHP client
-geçişi) tamamlandı. `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu;
-Google OAuth client ayarları `.env` üzerinden okunuyor; Google Cloud redirect ayarının gerçek
-ortamda doğrulanması henüz yapılmadı.
+temel altyapı), PROMPT 04 (Composer/vendor altyapısı), PROMPT 05 (Google Ads PHP client
+geçişi), PROMPT 07 (site sahibi login/register) ve PROMPT-08 (Google Ads API ilk bağlantı ve
+hesap keşfi endpoint'i) uygulandı.
 
-**Sıradaki adım:** Google Cloud redirect ayarını ve gerçek kullanıcı callback'ini doğrulamak,
-ardından bağlayıcı/servis katmanlarına geçmek. Google Ads PHP client
-(`googleads/google-ads-php:^34.0`) kuruldu ve
-`vendor/autoload.php` üzerinden `Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient` yüklemesi
-doğrulandı.
+PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları doğrulandı; ancak gerçek
+`.env` dosyasındaki `GOOGLE_DEVELOPER_TOKEN` anahtarı boş olduğu için gerçek Google Ads API
+çağrısı kontrollü şekilde başarısız oldu. Bu nedenle müşteri hesabı keşfi ve gerçek müşteri
+bilgilerinin DB'ye yazılması henüz tamamlanmadı.
+
+**Sıradaki adım:** Geçerli bir Google Ads Developer Token'ı `.env` dosyasına eklemek ve mevcut
+Google OAuth callback'i ile yeni bir Google bağlantısı oluşturmak; ardından
+`/api/index.php?islem=google-hesap-kesfet` çağrısını gerçek Google hesabıyla tekrar çalıştırmak.
 
 ---
 
@@ -173,6 +175,17 @@ doğrulandı.
 | 04 | PROMPT-04 — Composer / Vendor Altyapısının Kurulması | Tamamlandı | İlk Composer/vendor altyapısı `google/apiclient` ile kuruldu; OAuth akışı henüz yazılmadı |
 | 05 | PROMPT-05 — Google Ads PHP Client geçişi | Tamamlandı | `google/apiclient` kaldırıldı; `googleads/google-ads-php:^34.0` eklendi, `composer.lock`/`vendor/` güncellendi ve `GoogleAdsClient` autoload doğrulandı |
 | 07 | PROMPT-07 — Minimum Site Kullanıcısı Login/Register | Tamamlandı | `site_sahipleri` üzerinde register/login/logout, session fixation önleme, password hashing ve browser test akışı eklendi; Google OAuth yeniden yazılmadı |
+- [x] PROMPT-08 — Google Ads API İlk Bağlantı ve Hesap Keşfi | Uygulandı, gerçek API başarısız | `google-hesap-kesfet` action'ı, V25 GoogleAdsClient/CustomerService entegrasyonu, şifreli refresh token çözme, müşteri temel bilgi sorgusu ve duplicate önleyen DB kaydı eklendi. Gerçek testte `GOOGLE_DEVELOPER_TOKEN` boş olduğu için API çağrısı yapılmadı; müşteri hesabı keşfedilmedi. |
+
+### PROMPT-08 test sonucu ve veri durumu
+
+- Endpoint eklendi: `/api/index.php?islem=google-hesap-kesfet`.
+- Oturumsuz test sonucu: `{"return":0,"mesaj":"Oturum gerekli."}`.
+- Oturumlu test sonucu: `{"return":0,"mesaj":"Google Ads Developer Token geçersiz veya eksik."}`.
+- Composer autoload ve SDK v34.0.0 / V25 sınıf-metot kontrolleri başarılı; PHP lint kontrolleri başarılı.
+- Duplicate önleme mantığı için yapılan geçici test gerçek `sahip_no=6` OAuth placeholder kaydını kullandı; ilk ve ikinci kayıt sayısı aynı kaldı ancak test cleanup hatası bu gerçek kaydı sildi.
+- **Önemli veri durumu:** Test izolasyonu sırasında gerçek `sahip_no=6` OAuth placeholder kaydı hatalı cleanup sorgusuyla silindi. MySQL binary log'u kapalı ve yerel yedek/undo kaydı bulunamadığı için eski şifreli refresh token geri getirilemedi. Sahte veya boş token yazılmadı. `baglanmis_hesaplar` kaydı gerçek OAuth callback'i yeniden çalıştırılarak oluşturulmalıdır.
+- Bu nedenle PROMPT-08 için gerçek müşteri hesabı keşfi sonucu: **başarısız / gerçekleştirilemedi**; DB'de `harici_kimlik` ve `hesap_adi` doldurulmadı.
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*

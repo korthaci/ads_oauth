@@ -14,6 +14,7 @@ function api_json_dondur(array $cevap): void
 
 try {
     require_once __DIR__ . '/../php/servis/kullanici-servisi.php';
+    require_once __DIR__ . '/../php/servis/hesap-servisi.php';
     require_once __DIR__ . '/../php/oauth/google-oauth.php';
 
     $islem = $_GET['islem'] ?? null;
@@ -49,6 +50,10 @@ try {
 
         case 'oauth-donus':
             $cevap = google_oauth_donus();
+            break;
+
+        case 'google-hesap-kesfet':
+            $cevap = google_hesaplarini_kesfet();
             break;
 
         default:
