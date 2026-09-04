@@ -106,6 +106,27 @@ doğrulandı.
   değerini plaintext olmayan ciphertext olarak doğrula; ardından bağlayıcı ve servis katmanına
   geç.
 
+- **PROMPT-07 durumu: Tamamlandı.** Minimum site sahibi kayıt/giriş altyapısı oluşturuldu.
+  `site_sahipleri` tablosu kullanıldı; yeni tablo veya şema değişikliği yapılmadı. E-posta
+  normalize/doğrulama, duplicate e-posta mesajı, `password_hash()` / `password_verify()`,
+  mevcut session fonksiyonları, login sonrası `session_regenerate_id(true)`, logout ve
+  oturum kontrolü eklendi. Kayıt ve giriş API action'ları `api/index.php` üzerinden JSON
+  standardında çalışıyor; kök `index.php` ve mevcut tema dosyaları gerçek browser form akışını
+  sağlıyor.
+- **PROMPT-07 değişen dosyalar:** `index.php`, `api/index.php`,
+  `php/servis/kullanici-servisi.php`, `tema/giris.php`, `tema/panel/anasayfa.php`,
+  `tema/layout/header.php`, `tema/layout/footer.php`, `md/DURUM.md`.
+- **PROMPT-07 test sonucu:** PHP syntax/lint, Composer autoload, PDO veritabanı bağlantısı,
+  kayıt, normalize edilmiş e-posta, plaintext olmayan password hash, başarılı login,
+  başarısız login için genel hata, duplicate e-posta, login sonrası session ID yenileme,
+  `sahip_no` session kontrolü, logout, logout sonrası session temizliği ve login olmadan
+  Google OAuth başlangıcının reddedilmesi doğrulandı. Giriş yapılmış HTTP session ile OAuth
+  başlangıcının authorization URL üretmesi ve sabit redirect URI'yi kullanması da doğrulandı.
+- **PROMPT-07 başarısız test:** Yok. Geçici test kullanıcısı ve test dosyaları temizlendi;
+  şifre, hash veya credential bu dosyaya yazılmadı.
+- **PROMPT-07 sonraki adım:** Gerçek login olmuş browser session ile Google consent ekranını
+  tamamlamak, callback ve şifreli `baglanmis_hesaplar.refresh_token_sifreli` kaydını doğrulamak.
+
 ## 3. Bekleyen / Henüz Yapılmayanlar
 
 - [ ] Google Ads API Developer Token başvurusu (Kort tarafında yapılacak).
@@ -151,6 +172,7 @@ doğrulandı.
 | 03 | `md/03-temel-altyapi.md` | Tamamlandı | İlk SQL şeması ve Google öncelikli temel altyapı fonksiyonları eklendi |
 | 04 | PROMPT-04 — Composer / Vendor Altyapısının Kurulması | Tamamlandı | İlk Composer/vendor altyapısı `google/apiclient` ile kuruldu; OAuth akışı henüz yazılmadı |
 | 05 | PROMPT-05 — Google Ads PHP Client geçişi | Tamamlandı | `google/apiclient` kaldırıldı; `googleads/google-ads-php:^34.0` eklendi, `composer.lock`/`vendor/` güncellendi ve `GoogleAdsClient` autoload doğrulandı |
+| 07 | PROMPT-07 — Minimum Site Kullanıcısı Login/Register | Tamamlandı | `site_sahipleri` üzerinde register/login/logout, session fixation önleme, password hashing ve browser test akışı eklendi; Google OAuth yeniden yazılmadı |
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*

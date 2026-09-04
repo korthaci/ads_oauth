@@ -1,1 +1,3 @@
-<!-- Ortak sayfa altligi. DURUM: Iskelet. -->
+</main>
+</body>
+</html>

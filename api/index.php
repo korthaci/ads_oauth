@@ -2,8 +2,8 @@
 
 /**
  * Genel API HTTP giris noktasi.
- * OAuth islemlerini php/oauth/google-oauth.php katmanina dispatch eder ve JSON
- * response doner; teknik OAuth mantigi bu dosyada tutulmaz.
+ * Kullanici ve OAuth islemlerini ilgili servis/teknik katmanlara dispatch eder
+ * ve JSON response doner; is mantigi bu dosyada tutulmaz.
  */
 
 function api_json_dondur(array $cevap): void
@@ -13,6 +13,7 @@ function api_json_dondur(array $cevap): void
 }
 
 try {
+    require_once __DIR__ . '/../php/servis/kullanici-servisi.php';
     require_once __DIR__ . '/../php/oauth/google-oauth.php';
 
     $islem = $_GET['islem'] ?? null;
@@ -26,6 +27,22 @@ try {
     }
 
     switch ($islem) {
+        case 'kayit':
+            $cevap = kullanici_kayit($_POST);
+            break;
+
+        case 'giris':
+            $cevap = kullanici_giris($_POST);
+            break;
+
+        case 'cikis':
+            $cevap = kullanici_cikis();
+            break;
+
+        case 'oturum-kontrol':
+            $cevap = kullanici_oturum_kontrolu();
+            break;
+
         case 'oauth-baslat':
             $cevap = google_oauth_baslat();
             break;
