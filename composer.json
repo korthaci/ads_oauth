@@ -4,6 +4,6 @@
     "type": "project",
     "require": {
         "php": ">=8.1",
-        "google/apiclient": "^2.19"
+        "googleads/google-ads-php": "^34.0"
     }
 }
