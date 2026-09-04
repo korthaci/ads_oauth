@@ -17,7 +17,8 @@
 
 ## 1. Şu An Neredeyiz?
 
-**Aşama:** PROMPT 00 (iskelet kurulum) ve PROMPT 01 (isimlendirme düzeltmesi + autoload kaldırma) tamamlandı.
+**Aşama:** PROMPT 00 (iskelet kurulum), PROMPT 01 (isimlendirme düzeltmesi + autoload kaldırma)
+ve PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü) tamamlandı.
 
 **Sıradaki adım:** Gerçek uygulama mantığı yazılmadan önce hazırlanacak bir sonraki prompt
 bekleniyor. Mevcut yapı yalnızca klasör/dosya iskeleti ve docblock yorumlarından oluşuyor.
@@ -42,6 +43,8 @@ bekleniyor. Mevcut yapı yalnızca klasör/dosya iskeleti ve docblock yorumları
 - [x] PROMPT 00 uygulandı: klasör/dosya iskeleti oluşturuldu, gerçek mantık eklenmedi.
 - [x] PROMPT 01 uygulandı: `php/` altındaki klasör ve dosya adları küçük harfe çevrildi;
       `composer.json` içindeki PSR-4 `autoload` bloğu kaldırıldı.
+- [x] PROMPT 02 uygulandı: PROMPT 01'in devamı/düzeltmesi olarak `php/` altındaki tüm klasör
+      ve dosya adlarının küçük harfli son hali doğrulandı; ek yeniden adlandırma gerekmedi.
 
 ## 3. Bekleyen / Henüz Yapılmayanlar
 
@@ -66,6 +69,7 @@ bekleniyor. Mevcut yapı yalnızca klasör/dosya iskeleti ve docblock yorumları
 | 2026-09-04 | api/ JSON formatı `{return, mesaj}` olarak belirlendi | Websistem `php/class_f/` ve `api/` koduna bakılarak netleştirildi (Kort'un alışık olduğu format) |
 | 2026-09-04 | `php/` altındaki klasör ve dosya adları küçük harfe çevrildi | Dosya yolu tutarlılığı ve platformlar arası adlandırma uyumu |
 | 2026-09-04 | Kendi sınıfları için Composer PSR-4 autoload kullanılmamasına karar verildi | Manuel `require_once` stratejisi kullanılacak |
+| 2026-09-04 | PROMPT 02 ile `php/` altındaki tüm adlandırmaların küçük harfli son hali doğrulandı | PROMPT 01'in devamı/düzeltmesi; ek yeniden adlandırma gerekmedi |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
 
@@ -79,6 +83,7 @@ bekleniyor. Mevcut yapı yalnızca klasör/dosya iskeleti ve docblock yorumları
 |---|---|---|---|
 | 00 | `md/00-iskelet-kurulum.md` | Tamamlandı | Sadece klasör/dosya + docblock oluşturuldu, mantık eklenmedi |
 | 01 | `md/01-isimlendirme-duzeltme.md` | Tamamlandı | `php/` altındaki adlar küçültüldü, Composer PSR-4 `autoload` bloğu kaldırıldı |
+| 02 | PROMPT 01 devamı/düzeltmesi | Tamamlandı | `php/` altındaki tüm klasör ve dosya adlarının küçük harfli son hali doğrulandı; ek yeniden adlandırma gerekmedi |
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*
