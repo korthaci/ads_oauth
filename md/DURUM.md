@@ -11,7 +11,7 @@
 keşfi tamamlandı; ancak gerçek bir non-manager müşteri hesabı bulunmadığı için kampanya
 listeleme aşamasına geçilemedi. Meta entegrasyonu bu projenin kapsamı değildir.
 
-**Proje adı:** ads_oauth *(eski adı "ads" idi — arama motorlarında/genel aramalarda "ads" kelimesi çok geçtiği için değiştirildi)*
+**Proje adı:** ads_oauth
 **Proje yolu:** `c:/server/htdocs/ads_oauth/`
 **GitHub reposu:** https://github.com/korthaci/ads_oauth (public)
 **Kod yazıcı ortam:** VS Code + Cline + Requesty → model: OpenAI GPT Luna (düşük token tüketimi hedefleniyor, proje sonuna kadar yetsin diye bilinçli olarak Claude/OpenAI'nin üst modelleri seçilmedi)
@@ -32,7 +32,10 @@ bulunamadığı için beklemede bırakıldı. PROMPT-12 kapsamında Manager
 `9530538405` altında `createCustomerClient` ile yeni müşteri oluşturma çağrısı tek kez
 gerçekleştirildi; çağrı başarısız oldu ve gerçek bir non-manager müşteri hesabı
 oluşturulamadı. PROMPT-14 kapsamında kalıcı ve güvenli API exception loglama altyapısı
-uygulandı; sonraki gerçek çağrı için proje durumu **BEKLEMEDE** olarak korunuyor.
+uygulandı. PROMPT-15 kapsamında canlı tablo ön koşulu doğrulanarak `createCustomerClient`
+çağrısı tam bir kez gerçek API'ye gönderildi; çağrı `PERMISSION_DENIED` ile başarısız oldu,
+hesap oluşturulmadı ve güvenli hata kaydı kalıcı olarak yazıldı. Proje durumu **BEKLEMEDE**
+olarak korunuyor.
 
 PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları kullanıldı. `.env` içindeki
 `GOOGLE_DEVELOPER_TOKEN` mevcut ve gerçek API çağrısında çalıştı. `listAccessibleCustomers()`
@@ -81,6 +84,34 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
   erişilebilir olmadan kampanya listeleme/geliştirmesine geçilmeyecek. Bu test sonucu
   tekrar `createCustomerClient` çağrısı yapılmayacak; Google Ads tarafındaki yetki/uygunluk
   durumu ayrıca netleşmeden farklı parametre veya ödeme işlemi denenmeyecek.
+
+### PROMPT-15 sonucu — `createCustomerClient` kontrollü gerçek çağrı ve kalıcı log
+
+- **Durum:** Başarısız; gerçek çağrı tam **1 kez** yapıldı; proje durumu **BEKLEMEDE** olarak
+  korunuyor.
+- Çağrı öncesi canlı ön koşul doğrulaması başarılı oldu: `ads_oauth` veritabanında
+  `api_hata_kayitlari` tablosu mevcuttu.
+- Manager Customer ID: `9530538405`. İstek alanları: `descriptive_name=ads_oauth Test`,
+  `currency_code=TRY`, `time_zone=Europe/Istanbul`.
+- Çağrı öncesi snapshot: `baglanmis_hesaplar` **1**, `api_hata_kayitlari` **0**.
+- Gerçek sonuç: hesap oluşturulmadan `PERMISSION_DENIED` ile başarısız oldu; yeni customer
+  resource name/customer ID dönmedi. Başarılı senaryodaki ek işlemler yapılmadı; yeni hesap
+  keşfi/doğrulaması, kampanya veya başka mutate çağrısı yapılmadı.
+- `api_hata_kayitlari` içindeki gerçek ve güvenli satır:
+
+  ```text
+  no=1 | api_cagrisi=createCustomerClient | exception_sinifi=Google\ApiCore\ApiException | status=PERMISSION_DENIED | kod=7 | mesaj=The caller does not have permission | hatalar=NULL | request_id=NULL | kayit_tarihi=2026-09-05 22:05:48
+  ```
+
+- Satırda credential, token, request/response gövdesi veya hassas metadata bulunmuyor.
+  `hatalar` ve `request_id` gerçek sonuçta mevcut değildi; bu nedenle `NULL` kaldı.
+- Çağrı sonrası doğrulama: `baglanmis_hesaplar` **1** olarak değişmedi; `api_hata_kayitlari`
+  **1** oldu. Aktif OAuth kaydı (`no=2`, Manager `9530538405`) ve refresh token doluluğu
+  değişmedi; token değeri loglanmadı. Geçici çağrı scripti silindi.
+- **Net sonraki adım:** Yeni API/mutate çağrısı yapılmadan önce Manager hesabının Google Ads
+  tarafındaki müşteri oluşturma yetkisi, developer token erişimi ve hesap uygunluğu yetkili
+  hesap yöneticisiyle kontrol edilmelidir. `PERMISSION_DENIED` giderilmeden farklı parametreyle
+  tekrar deneme yapılmamalıdır. Yetki/uygunluk doğrulanırsa yeni çağrı için ayrıca onay alınmalıdır.
 
 ### PROMPT-13 sonucu — `createCustomerClient` hata teşhisi
 
@@ -388,6 +419,7 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
 | 12 | PROMPT-12 — Google Ads `createCustomerClient` kontrollü hesap oluşturma testi | Başarısız — proje beklemede | Gerçek çağrı tam 1 kez gönderildi; `Google\\ApiCore\\ApiException` oluştu, yapılandırılmış Ads hata kodu/mesajı elde edilemedi ve tahmin edilmedi. Hesap oluşturulmadı, CustomerClient doğrulaması yapılmadı; DB/OAuth/token değişmedi, geçici test dosyası silindi. |
 | 13 | PROMPT-13 — Google Ads `createCustomerClient` hata teşhisi | Durum 3 — gerçek hata bilgisi elde edilemedi | PROMPT-12'nin ham exception/log kaydı bulunmadığından status, code, güvenli message ve request ID geriye dönük çıkarılamadı. SDK V25 exception accessor'ları credential içermeyen sentetik testle doğrulandı; API/mutate tekrarlanmadı ve kalıcı kod değişikliği yapılmadı. |
 | 14 | PROMPT-14 — `createCustomerClient` hatasını kalıcı ve güvenli yakalama | Tamamlandı — gerçek çağrı yapılmadı | `GoogleAdsException`/`ApiException` allowlist extraction, mesaj redaction, ayrı `api_hata_kayitlari` tablosuna kalıcı log ve mevcut catch entegrasyonu eklendi. `db/sema.sql` değişti; sentetik extraction/DB rollback testi geçti. |
+| 15 | PROMPT-15 — `createCustomerClient` kontrollü gerçek çağrı ve kalıcı log | Başarısız — gerçek çağrı tam 1 kez yapıldı | Canlı `api_hata_kayitlari` tablosu doğrulandı; Manager `9530538405` çağrısı `PERMISSION_DENIED` / `kod=7` ile başarısız oldu. `api_hata_kayitlari` satırı kalıcı yazıldı; `baglanmis_hesaplar` ve OAuth kaydı değişmedi, geçici script silindi. |
 
 ### PROMPT-08 gerçek API test sonucu ve veri durumu
 
