@@ -31,7 +31,8 @@ PROMPT-11 (Google Ads test müşteri hesabı geçişi) gerçek non-manager müş
 bulunamadığı için beklemede bırakıldı. PROMPT-12 kapsamında Manager
 `9530538405` altında `createCustomerClient` ile yeni müşteri oluşturma çağrısı tek kez
 gerçekleştirildi; çağrı başarısız oldu ve gerçek bir non-manager müşteri hesabı
-oluşturulamadı.
+oluşturulamadı. PROMPT-14 kapsamında kalıcı ve güvenli API exception loglama altyapısı
+uygulandı; sonraki gerçek çağrı için proje durumu **BEKLEMEDE** olarak korunuyor.
 
 PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları kullanıldı. `.env` içindeki
 `GOOGLE_DEVELOPER_TOKEN` mevcut ve gerçek API çağrısında çalıştı. `listAccessibleCustomers()`
@@ -117,6 +118,40 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
   yapılmadan önce yalnızca allowlist edilmiş exception class/status/code, credential içermeyen
   sanitize edilmiş message ve varsa request ID güvenli şekilde alınmalıdır. Bu promptta
   `createCustomerClient` yeniden çalıştırılmayacaktır.
+
+### PROMPT-14 sonucu — `createCustomerClient` hatasını kalıcı ve güvenli yakalama altyapısı
+
+- **Durum:** Tamamlandı; gerçek Google Ads API/mutate çağrısı yapılmadı.
+- `php/baglayici/google-ads-baglayici.php` içine `google_ads_hata_ayristir()` ve
+  `google_ads_hata_kaydi_yaz()` eklendi. `GoogleAdsException` için `getGoogleAdsFailure()` içindeki
+  tüm dolu V25 error-code oneof alt tipleri dinamik olarak alt tip adı + enum adı biçiminde çıkarılıyor;
+  `getRequestId()`, status ve numeric code ayrıca saklanıyor. Genel `ApiException` için yalnızca
+  status, code ve `getBasicMessage()` kullanılıyor.
+- Hata mesajı kayda alınmadan önce e-posta, Authorization/Bearer değeri, refresh/access/developer
+  token, client secret/ID, API key, password ve yapılandırmadaki Google değerleri `[redacted]` ile
+  maskeleniyor. Metadata, credential, token, Authorization header ve tam request/response body
+  okunmuyor veya kaydedilmiyor. Yapısal Google Ads hataları yalnızca sanitize edilmiş
+  `error_code` ve `message` alanları olarak JSON kaydediliyor.
+- Yeni `api_hata_kayitlari` tablosu üzerinden tarih/saat, API çağrısı, exception sınıfı,
+  status/code, sanitize edilmiş mesaj, yapılandırılmış Ads hata listesi ve request ID kalıcı olarak
+  saklanıyor. Log insert'i yalnızca exception catch akışlarında çalışıyor; normal başarılı akışa
+  ekstra DB işlemi eklenmedi. Log yazma başarısız olursa kullanıcıya dönen genel JSON bozulmuyor.
+- Mevcut Google Ads catch noktaları `GoogleAdsClientBuilder::build`, `CustomerService::listAccessibleCustomers`,
+  `GoogleAdsService::search` ve Manager `customer_client` search hatalarında yeni log mekanizmasını
+  çağıracak şekilde güncellendi. `api/index.php` beklenmeyen exception'lar için son güvenlik ağı olarak
+  aynı sanitize edilmiş logger'ı kullanıyor; mevcut `{return, mesaj}` JSON biçimi korunuyor.
+- **DB şema değişikliği vardır:** `db/sema.sql` dosyasına ayrı `api_hata_kayitlari` tablosu eklendi;
+  mevcut `baglanmis_hesaplar`, OAuth kayıtları ve `senkron_kayitlari` değiştirilmedi. Bu tablo için
+  üretim veritabanında ayrıca şema uygulanmalıdır. Bu oturumda canlı DB'ye şema uygulama/doğrulama
+  işlemi tamamlanamadı; bir sonraki gerçek API çağrısından önce `db/sema.sql` içindeki yeni tablo
+  uygulanmalıdır. Logger, tablo henüz yoksa kullanıcı response'unu bozmayacak şekilde hatayı yutar.
+- **Değişen dosyalar:** `php/baglayici/google-ads-baglayici.php`, `api/index.php`,
+  `db/sema.sql` ve bu durum kaydı olan `md/DURUM.md`.
+- Credential içermeyen sentetik V25 `GoogleAdsException` ve genel `ApiException` testi; extraction,
+  redaction, iki log INSERT'i ve transaction rollback ile başarılı oldu. Geçici test dosyası workspace'e
+  eklenmedi ve test kaydı kalıcı bırakılmadı.
+- Bu promptta `createCustomerClient` veya başka bir mutate çağrısı tekrarlanmadı; mevcut DB/OAuth/
+  refresh token kayıtları değiştirilmedi, kampanya/reklam/bütçe/ad group/keyword ve Meta işlemi yapılmadı.
 
 ### PROMPT-09 sonucu
 
@@ -221,6 +256,9 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
       ve dosya adlarının küçük harfli son hali doğrulandı; ek yeniden adlandırma gerekmedi.
 - [x] PROMPT 03 uygulandı: `db/sema.sql` oluşturuldu, temel config/veritabanı/oturum/şifreleme
       mantığı yazıldı ve `.env.sample` içindeki `DB_NAME` değeri `ads_oauth` olarak ayarlandı.
+- [x] PROMPT-14 uygulandı: Google Ads/API exception'ları credential/body kaydetmeden ayrıştıran,
+      sanitize eden ve `api_hata_kayitlari` tablosuna kalıcı yazan güvenli loglama altyapısı eklendi;
+      sentetik GoogleAdsException/ApiException extraction ve rollback testi geçti.
 - [x] Gerçek `.env` dosyası oluşturuldu ve veritabanı bilgileriyle dolduruldu.
 - [x] PROMPT 04 uygulandı: İlk Composer/vendor altyapısı `google/apiclient` ile kuruldu;
       `vendor/` ve `vendor/autoload.php` oluşturuldu. Google OAuth akışı henüz yazılmadı.
@@ -349,6 +387,7 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
 | 11 | PROMPT-11 — Google Ads Test Müşteri Hesabı Geçişi | Beklemede — gerçek non-manager müşteri hesabı yok | Read-only `listAccessibleCustomers()` ve Manager `9530538405` `CustomerClient` sonucu tekrar doğrulandı; 0 `manager=false` child hesabı bulundu. Kod geliştirilmedi, mevcut OAuth/DB/token korundu. |
 | 12 | PROMPT-12 — Google Ads `createCustomerClient` kontrollü hesap oluşturma testi | Başarısız — proje beklemede | Gerçek çağrı tam 1 kez gönderildi; `Google\\ApiCore\\ApiException` oluştu, yapılandırılmış Ads hata kodu/mesajı elde edilemedi ve tahmin edilmedi. Hesap oluşturulmadı, CustomerClient doğrulaması yapılmadı; DB/OAuth/token değişmedi, geçici test dosyası silindi. |
 | 13 | PROMPT-13 — Google Ads `createCustomerClient` hata teşhisi | Durum 3 — gerçek hata bilgisi elde edilemedi | PROMPT-12'nin ham exception/log kaydı bulunmadığından status, code, güvenli message ve request ID geriye dönük çıkarılamadı. SDK V25 exception accessor'ları credential içermeyen sentetik testle doğrulandı; API/mutate tekrarlanmadı ve kalıcı kod değişikliği yapılmadı. |
+| 14 | PROMPT-14 — `createCustomerClient` hatasını kalıcı ve güvenli yakalama | Tamamlandı — gerçek çağrı yapılmadı | `GoogleAdsException`/`ApiException` allowlist extraction, mesaj redaction, ayrı `api_hata_kayitlari` tablosuna kalıcı log ve mevcut catch entegrasyonu eklendi. `db/sema.sql` değişti; sentetik extraction/DB rollback testi geçti. |
 
 ### PROMPT-08 gerçek API test sonucu ve veri durumu
 

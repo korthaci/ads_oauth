@@ -53,3 +53,19 @@ CREATE TABLE `senkron_kayitlari` (
   KEY `kampanya_no` (`kampanya_no`),
   CONSTRAINT `fk_senkron_kampanya` FOREIGN KEY (`kampanya_no`) REFERENCES `kampanyalar` (`no`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `api_hata_kayitlari` (
+  `no` int(11) NOT NULL AUTO_INCREMENT,
+  `api_cagrisi` varchar(150) NOT NULL,
+  `exception_sinifi` varchar(255) NOT NULL,
+  `status` varchar(100) DEFAULT NULL,
+  `kod` int(11) DEFAULT NULL,
+  `mesaj` text NOT NULL,
+  `hatalar` text DEFAULT NULL,
+  `request_id` varchar(255) DEFAULT NULL,
+  `kayit_tarihi` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`no`),
+  KEY `api_cagrisi` (`api_cagrisi`),
+  KEY `kayit_tarihi` (`kayit_tarihi`),
+  KEY `request_id` (`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

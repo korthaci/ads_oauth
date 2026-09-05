@@ -70,6 +70,10 @@ try {
 
     api_json_dondur($cevap);
 } catch (Throwable $hata) {
+    if (function_exists('google_ads_hata_kaydi_yaz')) {
+        google_ads_hata_kaydi_yaz('api.index', $hata);
+    }
+
     // Hassas OAuth verileri response'a veya log'a yazilmaz.
     api_json_dondur([
         'return' => 0,
