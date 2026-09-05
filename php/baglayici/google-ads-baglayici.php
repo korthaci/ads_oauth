@@ -197,6 +197,7 @@ function google_ads_hesaplarini_kesfet(string $refresh_token): array
 
         $google_ads_service = $client->getGoogleAdsServiceClient();
         $hesaplar = [];
+        $ilk_hesap_hatasi = null;
         $gaql = 'SELECT customer.id, customer.descriptive_name, '
             . 'customer.currency_code, customer.time_zone, customer.manager '
             . 'FROM customer LIMIT 1';
@@ -209,11 +210,16 @@ function google_ads_hesaplarini_kesfet(string $refresh_token): array
                 continue;
             }
 
-            $search_response = $google_ads_service->search(
-                SearchGoogleAdsRequest::build($customer_id, $gaql)
-            );
+            try {
+                $search_response = $google_ads_service->search(
+                    SearchGoogleAdsRequest::build($customer_id, $gaql)
+                );
+            } catch (Throwable $hata) {
+                $ilk_hesap_hatasi ??= $hata;
+                continue;
+            }
 
-            foreach ($search_response->getResults() as $row) {
+            foreach ($search_response as $row) {
                 $customer = $row->getCustomer();
 
                 if ($customer === null) {
@@ -239,6 +245,16 @@ function google_ads_hesaplarini_kesfet(string $refresh_token): array
 
                 break;
             }
+        }
+
+        if ($hesaplar === [] && $ilk_hesap_hatasi !== null) {
+            $kategori = google_ads_hata_kategorisi($ilk_hesap_hatasi);
+
+            throw new GoogleAdsKesifHatasi(
+                google_ads_hata_mesaji($kategori),
+                $kategori,
+                $ilk_hesap_hatasi
+            );
         }
 
         return array_values($hesaplar);

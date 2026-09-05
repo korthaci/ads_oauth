@@ -5,7 +5,7 @@
 > **Güncelleme sorumluluğu kod yazıcı AI'ye (Cline/Requesty) aittir.** Claude bu dosyayı
 > artık düzenlemez, sadece yeni prompt hazırlarken referans olarak okur.
 
-**Son güncelleme:** 2026-09-04
+**Son güncelleme:** 2026-09-05
 
 **Proje adı:** ads_oauth *(eski adı "ads" idi — arama motorlarında/genel aramalarda "ads" kelimesi çok geçtiği için değiştirildi)*
 **Proje yolu:** `c:/server/htdocs/ads_oauth/`
@@ -23,17 +23,25 @@ temel altyapı), PROMPT 04 (Composer/vendor altyapısı), PROMPT 05 (Google Ads 
 geçişi), PROMPT 07 (site sahibi login/register) ve PROMPT-08 (Google Ads API ilk bağlantı ve
 hesap keşfi endpoint'i) uygulandı.
 
-PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları doğrulandı; ancak gerçek
-`.env` dosyasındaki `GOOGLE_DEVELOPER_TOKEN` anahtarı boş olduğu için gerçek Google Ads API
-çağrısı kontrollü şekilde başarısız oldu. Bu nedenle müşteri hesabı keşfi ve gerçek müşteri
-bilgilerinin DB'ye yazılması henüz tamamlanmadı.
+PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları kullanıldı. `.env` içindeki
+`GOOGLE_DEVELOPER_TOKEN` mevcut ve gerçek API çağrısında çalıştı. `listAccessibleCustomers()`
+gerçek çağrısı 2 customer resource name döndürdü. Bunlardan `customers/9530538405` temel
+bilgileriyle keşfedilip `baglanmis_hesaplar` tablosuna kaydedildi; `customers/4150407743`
+`PERMISSION_DENIED` / `CUSTOMER_NOT_ENABLED` nedeniyle atlandı. Kaydedilen hesap sayısı: **1**.
 
-**Sıradaki adım:** Geçerli bir Google Ads Developer Token'ı `.env` dosyasına eklemek ve mevcut
-Google OAuth callback'i ile yeni bir Google bağlantısı oluşturmak; ardından
-`/api/index.php?islem=google-hesap-kesfet` çağrısını gerçek Google hesabıyla tekrar çalıştırmak.
+Gerçek API yanıtında Developer Token erişim seviyesi (Basic/Standard) bilgisi bulunmadığı için
+erişim seviyesi tahmin edilmedi ve **doğrulanamadı**. Bu keşif çağrısında `login-customer-id`
+eklenmeden hem erişilebilir müşteri listesi hem de geçerli müşterinin temel bilgileri alındı;
+bu nedenle bu çağrı için gerekmedi. Manager hesabı sonucu `customer.manager = true` olarak
+alındı, ancak manager hesabı hiyerarşisi için varsayımsal bir login customer ID eklenmedi.
 
-PROMPT-08.1 için bu dosyanın altındaki güvenlik notu geçerlidir. Bu prompt kapsamında Google
-Ads API, Developer Token veya OAuth callback tekrar çalıştırılmadı.
+İkinci gerçek endpoint çalıştırmasında duplicate kontrolü doğrulandı: kayıt sayısı 1 kaldı,
+OAuth kaydının `no=2` değeri ve şifreli refresh token doluluğu korundu. Kampanya, reklam grubu,
+reklam, bütçe, teklif, anahtar kelime veya UI işlemi yapılmadı.
+
+**Sıradaki adım:** Google Ads API erişim seviyesi Google Ads hesabı/developer token yönetim
+ekranından ayrıca doğrulanabilir. `CUSTOMER_NOT_ENABLED` olan hesabın durumu Google Ads
+tarafında etkinleştirilirse keşif tekrar çalıştırılabilir. Kampanya işlemlerine geçilmedi.
 
 ---
 
@@ -178,18 +186,24 @@ Ads API, Developer Token veya OAuth callback tekrar çalıştırılmadı.
 | 04 | PROMPT-04 — Composer / Vendor Altyapısının Kurulması | Tamamlandı | İlk Composer/vendor altyapısı `google/apiclient` ile kuruldu; OAuth akışı henüz yazılmadı |
 | 05 | PROMPT-05 — Google Ads PHP Client geçişi | Tamamlandı | `google/apiclient` kaldırıldı; `googleads/google-ads-php:^34.0` eklendi, `composer.lock`/`vendor/` güncellendi ve `GoogleAdsClient` autoload doğrulandı |
 | 07 | PROMPT-07 — Minimum Site Kullanıcısı Login/Register | Tamamlandı | `site_sahipleri` üzerinde register/login/logout, session fixation önleme, password hashing ve browser test akışı eklendi; Google OAuth yeniden yazılmadı |
-- [x] PROMPT-08 — Google Ads API İlk Bağlantı ve Hesap Keşfi | Uygulandı, gerçek API başarısız | `google-hesap-kesfet` action'ı, V25 GoogleAdsClient/CustomerService entegrasyonu, şifreli refresh token çözme, müşteri temel bilgi sorgusu ve duplicate önleyen DB kaydı eklendi. Gerçek testte `GOOGLE_DEVELOPER_TOKEN` boş olduğu için API çağrısı yapılmadı; müşteri hesabı keşfedilmedi. |
+| 08 | PROMPT-08 — Google Ads API İlk Bağlantı ve Hesap Keşfi | Tamamlandı, 1 hesap kaydedildi | `google-hesap-kesfet` action'ı gerçek `listAccessibleCustomers()` ve V25 müşteri temel bilgi sorgusuyla çalıştı. 2 kaynak bulundu; `9530538405` kaydedildi, `4150407743` `CUSTOMER_NOT_ENABLED` nedeniyle atlandı. Developer Token mevcut; erişim seviyesi API yanıtından doğrulanamadı. |
 | 08.1 | PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi | Uygulandı, canlı kayıt doğrulaması yapılamadı | Test cleanup için repo içinde silme mekanizması bulunmadı; hesap keşfi placeholder seçimi artık yalnızca dolu şifreli refresh token taşıyan gerçek OAuth kaydını kullanıyor. Google Ads API/OAuth tekrar çalıştırılmadı. |
 
-### PROMPT-08 test sonucu ve veri durumu
+### PROMPT-08 gerçek API test sonucu ve veri durumu
 
 - Endpoint eklendi: `/api/index.php?islem=google-hesap-kesfet`.
 - Oturumsuz test sonucu: `{"return":0,"mesaj":"Oturum gerekli."}`.
-- Oturumlu test sonucu: `{"return":0,"mesaj":"Google Ads Developer Token geçersiz veya eksik."}`.
+- Oturumlu gerçek test sonucu: `{"return":1,"mesaj":"Google Ads hesapları başarıyla keşfedildi.","hesaplar":[{"harici_kimlik":"9530538405","hesap_adi":"ads_oauth","yonetici":true}]}`.
+- `GOOGLE_DEVELOPER_TOKEN` `.env` içinde mevcut ve gerçek API isteği çalıştı. Developer Token erişim seviyesi Basic/Standard olarak API yanıtından alınamadı; tahmin edilmedi.
+- `listAccessibleCustomers()` sonucu: 2 kaynak — `customers/4150407743` ve `customers/9530538405`.
+- `customers/4150407743` müşteri sorgusu: `PERMISSION_DENIED`, `authorizationError=CUSTOMER_NOT_ENABLED`; hesap etkin değil veya deaktive edilmiş olduğundan kaydedilmedi.
+- `customers/9530538405` müşteri sorgusu başarılı: `customer.id=9530538405`, `descriptive_name=ads_oauth`, `customer.manager=true`; temel müşteri keşfi kaydedildi.
+- Veritabanına kaydedilen hesap sayısı: **1**. `sahip_no=6`, `platform=google`, `harici_kimlik=9530538405`, `hesap_adi=ads_oauth`, `aktif=1`.
+- Mevcut OAuth kaydı `no=2` placeholder olarak kullanıldı. Şifreli refresh token dolu kaldı; token değeri response/log'a yazılmadı ve yeni hesaba token kopyalanmadı.
+- İkinci gerçek keşif çağrısında duplicate kontrolü başarılı oldu: kayıt sayısı ve `no=2` değişmedi.
+- Oturumsuz test sonucu: `{"return":0,"mesaj":"Oturum gerekli."}`.
+- `login-customer-id` bu keşif çağrısında eklenmeden API çağrısı başarılı oldu; Google tarafından bu çağrı için gerekli olduğu bildirilmedi.
 - Composer autoload ve SDK v34.0.0 / V25 sınıf-metot kontrolleri başarılı; PHP lint kontrolleri başarılı.
-- Duplicate önleme mantığı için yapılan geçici test gerçek `sahip_no=6` OAuth placeholder kaydını kullandı; ilk ve ikinci kayıt sayısı aynı kaldı ancak test cleanup hatası bu gerçek kaydı sildi.
-- **Önemli veri durumu:** Test izolasyonu sırasında gerçek `sahip_no=6` OAuth placeholder kaydı hatalı cleanup sorgusuyla silindi. MySQL binary log'u kapalı ve yerel yedek/undo kaydı bulunamadığı için eski şifreli refresh token geri getirilemedi. Sahte veya boş token yazılmadı. `baglanmis_hesaplar` kaydı gerçek OAuth callback'i yeniden çalıştırılarak oluşturulmalıdır.
-- Bu nedenle PROMPT-08 için gerçek müşteri hesabı keşfi sonucu: **başarısız / gerçekleştirilemedi**; DB'de `harici_kimlik` ve `hesap_adi` doldurulmadı.
 
 ### PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi
 
@@ -210,10 +224,14 @@ Ads API, Developer Token veya OAuth callback tekrar çalıştırılmadı.
   bulunmuyor. Kod koşulu, dolu refresh token şartını içeriyor.
 - Senaryo B: Canlı DB'de test kaydı oluşturulmadı veya silinmedi; bu nedenle mevcut test verisi
   sayısı `0` ve production verisine dokunulmadı.
-- Senaryo C/D: Google Ads API çağrısı yapılmadan servis kodu incelendi; duplicate/placeholder
-  mantığı mevcut transaction ve token-korumalı placeholder koşuluyla bırakıldı.
-- **Google Ads API bu prompt kapsamında tekrar test edilmedi.** `GOOGLE_DEVELOPER_TOKEN`
-  kontrol edilmedi, `listAccessibleCustomers()` ve `GoogleAdsService::search()` çalıştırılmadı.
+- Senaryo C/D: Gerçek API çağrısı yapıldı; SDK v34 `PagedListResponse` iterasyonu düzeltildi,
+  müşteri bazlı `CUSTOMER_NOT_ENABLED` hatası diğer erişilebilir müşterilerin keşfini
+  durdurmayacak şekilde ele alındı. Duplicate/placeholder mantığı transaction ve token-korumalı
+  koşulla çalıştı.
+- Google Ads API gerçek sonucu: `listAccessibleCustomers()` başarılı; 2 kaynak bulundu,
+  1 müşteri temel bilgileriyle kaydedildi, 1 müşteri `CUSTOMER_NOT_ENABLED` nedeniyle atlandı.
+- **Kampanya API çağrısı yapılmadı.** Yalnızca müşteri keşfi için `CustomerService` ve temel
+  müşteri bilgisi için `GoogleAdsService.search()` kullanıldı.
 - **DB şeması değişmedi.** OAuth callback, login/register, session, şifreleme, Composer ve
   Meta OAuth dosyaları değiştirilmedi.
 

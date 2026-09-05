@@ -52,8 +52,8 @@ function google_aktif_baglantiyi_al(int $sahip_no): ?array
  * Ilk yeni gercek hesap, OAuth callback'in olusturdugu NULL harici kimlikli ve
  * dolu sifreli refresh token tasiyan placeholder kaydi kullanir. Token icermeyen
  * NULL harici kimlikli kayitlar placeholder olarak kullanilmaz. Diger yeni
- * hesaplar mevcut sifreli refresh token ile eklenir. Var olan hesaplarda
- * refresh token kolonuna dokunulmaz.
+ * hesaplar token olmadan eklenir. Var olan hesaplarda refresh token kolonuna
+ * dokunulmaz.
  *
  * @param array<int, array{
  *     harici_kimlik: string,
@@ -65,7 +65,6 @@ function google_aktif_baglantiyi_al(int $sahip_no): ?array
  */
 function google_kesfedilen_hesaplari_kaydet(
     int $sahip_no,
-    string $refresh_token_sifreli,
     array $hesaplar
 ): void {
     $baglanti = veritabani_baglan();
@@ -121,7 +120,7 @@ function google_kesfedilen_hesaplari_kaydet(
             . '(`sahip_no`, `platform`, `harici_kimlik`, `hesap_adi`, '
             . '`refresh_token_sifreli`, `erisim_token_sifreli`, `token_bitis`, `aktif`) '
             . 'VALUES (:sahip_no, :platform, :harici_kimlik, :hesap_adi, '
-            . ':refresh_token_sifreli, NULL, NULL, 1)'
+            . 'NULL, NULL, NULL, 1)'
         );
 
         foreach ($hesaplar as $hesap) {
@@ -157,7 +156,6 @@ function google_kesfedilen_hesaplari_kaydet(
                 'platform' => 'google',
                 'harici_kimlik' => $harici_kimlik,
                 'hesap_adi' => $hesap_adi,
-                'refresh_token_sifreli' => $refresh_token_sifreli,
             ]);
             $mevcut_hesaplar[$harici_kimlik] = (int) $baglanti->lastInsertId();
         }
@@ -222,7 +220,6 @@ function google_hesaplarini_kesfet(): array
 
         google_kesfedilen_hesaplari_kaydet(
             $sahip_no,
-            $baglanti['refresh_token_sifreli'],
             $hesaplar
         );
     } catch (GoogleAdsKesifHatasi $hata) {
