@@ -56,6 +56,10 @@ try {
             $cevap = google_hesaplarini_kesfet();
             break;
 
+        case 'google-musteri-hesaplari':
+            $cevap = google_musteri_hesaplarini_kesfet();
+            break;
+
         default:
             $cevap = [
                 'return' => 0,

@@ -230,6 +230,27 @@ ads_oauth/
 
 ---
 
+## Proje Kapsamı ve Meta Entegrasyonu
+
+Bu projenin mevcut geliştirme kapsamı Google Ads entegrasyonudur.
+
+Google Ads tarafı tamamlandığında `ads_oauth` projesi tamamlanmış kabul edilir ve
+`DURUM.md` içinde proje durumu **BİTTİ** olarak işaretlenir.
+
+Meta entegrasyonu bu projenin tamamlanma kriteri değildir.
+
+Meta entegrasyonu daha sonraki ayrı bir geliştirme fazı/konusu olarak ele alınacaktır.
+
+Meta geliştirmesine bu proje tamamlanmadan başlanmaz.
+
+Meta için gerekli OAuth, API, veri modeli, servisler, arayüzler ve entegrasyon
+kararları bu aşamada uygulanmaz.
+
+Mevcut Google Ads mimarisi, Meta entegrasyonu gelecek diye gereksiz şekilde
+genellenmez veya soyutlanmaz.
+
+---
+
 ## 8. Değişiklik Notu
 
 Bu dosyada mimari bir değişiklik yapılırsa, `DURUM.md` içindeki "Karar Günlüğü" bölümüne

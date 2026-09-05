@@ -7,6 +7,10 @@
 
 **Son güncelleme:** 2026-09-05
 
+**Proje durumu:** **BİTTİ** — Bu projenin Google Ads OAuth bağlantısı ve read-only müşteri
+keşfi kapsamı tamamlandı. Kampanya/mutate işlemleri ve Meta entegrasyonu bu projenin kapsamı
+değildir; sonraki ayrı geliştirme konularıdır.
+
 **Proje adı:** ads_oauth *(eski adı "ads" idi — arama motorlarında/genel aramalarda "ads" kelimesi çok geçtiği için değiştirildi)*
 **Proje yolu:** `c:/server/htdocs/ads_oauth/`
 **GitHub reposu:** https://github.com/korthaci/ads_oauth (public)
@@ -21,7 +25,8 @@
 PROMPT 02 (eksik kalan isimlendirme düzeltmelerinin kontrolü), PROMPT 03 (Google öncelikli
 temel altyapı), PROMPT 04 (Composer/vendor altyapısı), PROMPT 05 (Google Ads PHP client
 geçişi), PROMPT 07 (site sahibi login/register) ve PROMPT-08 (Google Ads API ilk bağlantı ve
-hesap keşfi endpoint'i) uygulandı.
+hesap keşfi endpoint'i) ve PROMPT-09 (Manager altındaki CustomerClient müşteri keşfi ve
+proje kapsam sınırı) uygulandı.
 
 PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları kullanıldı. `.env` içindeki
 `GOOGLE_DEVELOPER_TOKEN` mevcut ve gerçek API çağrısında çalıştı. `listAccessibleCustomers()`
@@ -42,6 +47,34 @@ reklam, bütçe, teklif, anahtar kelime veya UI işlemi yapılmadı.
 **Sıradaki adım:** Google Ads API erişim seviyesi Google Ads hesabı/developer token yönetim
 ekranından ayrıca doğrulanabilir. `CUSTOMER_NOT_ENABLED` olan hesabın durumu Google Ads
 tarafında etkinleştirilirse keşif tekrar çalıştırılabilir. Kampanya işlemlerine geçilmedi.
+
+### PROMPT-09 sonucu
+
+- Google Ads Manager Account `9530538405` üzerinden gerçek ve read-only
+  `GoogleAdsService.search()` çağrısı yapıldı. V25 GAQL sorgusu `CustomerClient` için
+  `id`, `descriptive_name`, `manager`, `status`, `currency_code`, `time_zone` ve `level`
+  alanlarını istedi.
+- SDK V25'in `withLoginCustomerId()` mekanizmasıyla mevcut Manager hesabı `9530538405`
+  kullanılarak yapılan çağrı başarılı oldu. Aynı sorgu `login-customer-id` gönderilmeden de
+  gerçek API'de başarılı oldu ve 1 kayıt döndürdü; bu nedenle bu akışta `login-customer-id`
+  zorunlu değildir. Her iki denemede de farklı veya varsayımsal bir customer ID kullanılmadı.
+- Gerçek API sonucu: **1** `CustomerClient` kaydı bulundu — `9530538405`, `ads_oauth`,
+  `manager=true`, `status=ENABLED`, `currency_code=TRY`, `time_zone=Europe/Istanbul`,
+  `level=0`.
+- Manager → child customer ilişkisi mevcut `baglanmis_hesaplar` şemasında parent alanı
+  bulunmadığı için DB'ye yeni ilişki/alan yazılmadı. Şema değiştirilmedi. Keşif sonucu yalnızca
+  kontrollü JSON response olarak döndürüldü.
+- Gerçek çağrı hatası oluşmadı. Önceki PROMPT-08 bulgusu olan `4150407743` hesabı
+  `CUSTOMER_NOT_ENABLED` nedeniyle hâlâ ayrı bir Google Ads etkinlik/yetki konusudur.
+- Endpoint oturum koruması doğrulandı: oturumsuz istek `{"return":0,"mesaj":"Oturum gerekli."}`
+  döndürdü. Oturumlu endpoint başarıyla çalıştı.
+- Çağrı öncesi/sonrası DB kontrolünde mevcut kayıt sayısı **1** kaldı; `no=2`,
+  `harici_kimlik=9530538405`, aktif durum ve şifreli refresh token korundu. Refresh token
+  müşteri sonuçlarına kopyalanmadı ve response/log'a yazılmadı.
+- Bu promptta kampanya, reklam, bütçe, teklif, hedefleme veya başka bir mutate çağrısı
+  yapılmadı. Meta OAuth/API/veri modeli/servis/arayüz uygulanmadı.
+- `ads_oauth` projesinin mevcut geliştirme kapsamı Google Ads'tir. Meta entegrasyonu bu
+  projenin tamamlanma kriteri değildir; ayrı bir geliştirme fazı/konusu olarak ele alınacaktır.
 
 ---
 
@@ -168,6 +201,7 @@ tarafında etkinleştirilirse keşif tekrar çalıştırılabilir. Kampanya işl
 | 2026-09-04 | Nihai hedef çoklu platform olsa da geliştirme sıralı ilerleyecek; önce Google Ads altyapısı tamamlanacak | Meta daha sonra eklenecek, bu aşamada yalnızca `google` platform değeri kullanılacak |
 | 2026-09-04 | DB engine olarak InnoDB seçildi | Foreign key desteği ve şifreli token'ların transactional bütünlüğü gerekiyor |
 | 2026-09-04 | Gerçek `.env` dosyası DB bilgileriyle oluşturuldu | Yerel veritabanı bağlantı ayarları hazırlandı; hassas değerler repora yazılmayacak |
+| 2026-09-05 | `ads_oauth` projesinin mevcut geliştirme kapsamı Google Ads ile sınırlandırıldı; Meta ayrı faza bırakıldı | Google Ads tamamlandığında proje BİTTİ kabul edilecek; Meta OAuth/API/veri modeli/servis/arayüz ve ortak soyutlama bu aşamada uygulanmayacak |
 | 2026-09-04 | Google ve Meta anahtarları henüz alınmadı; Google Ads PHP client olarak `googleads/google-ads-php:^34.0` seçildi ve `google/apiclient` kaldırıldı | Google Ads API entegrasyonu için resmi PHP client kullanılacak; OAuth ve gerçek API bağlantısı sonraki aşamaya bırakıldı |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
@@ -188,6 +222,7 @@ tarafında etkinleştirilirse keşif tekrar çalıştırılabilir. Kampanya işl
 | 07 | PROMPT-07 — Minimum Site Kullanıcısı Login/Register | Tamamlandı | `site_sahipleri` üzerinde register/login/logout, session fixation önleme, password hashing ve browser test akışı eklendi; Google OAuth yeniden yazılmadı |
 | 08 | PROMPT-08 — Google Ads API İlk Bağlantı ve Hesap Keşfi | Tamamlandı, 1 hesap kaydedildi | `google-hesap-kesfet` action'ı gerçek `listAccessibleCustomers()` ve V25 müşteri temel bilgi sorgusuyla çalıştı. 2 kaynak bulundu; `9530538405` kaydedildi, `4150407743` `CUSTOMER_NOT_ENABLED` nedeniyle atlandı. Developer Token mevcut; erişim seviyesi API yanıtından doğrulanamadı. |
 | 08.1 | PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi | Uygulandı, canlı kayıt doğrulaması yapılamadı | Test cleanup için repo içinde silme mekanizması bulunmadı; hesap keşfi placeholder seçimi artık yalnızca dolu şifreli refresh token taşıyan gerçek OAuth kaydını kullanıyor. Google Ads API/OAuth tekrar çalıştırılmadı. |
+| 09 | PROMPT-09 — Google Ads Müşteri Hesabı Keşfi ve Meta Sınırının Sabitlenmesi | Tamamlandı | Manager `9530538405` üzerinden V25 `CustomerClient` read-only keşfi gerçek API'de başarılı oldu; 1 kayıt bulundu. `baglanmis_hesaplar` şeması değiştirilmedi. Meta ayrı faz olarak kapsam dışı sabitlendi. |
 
 ### PROMPT-08 gerçek API test sonucu ve veri durumu
 
@@ -202,7 +237,9 @@ tarafında etkinleştirilirse keşif tekrar çalıştırılabilir. Kampanya işl
 - Mevcut OAuth kaydı `no=2` placeholder olarak kullanıldı. Şifreli refresh token dolu kaldı; token değeri response/log'a yazılmadı ve yeni hesaba token kopyalanmadı.
 - İkinci gerçek keşif çağrısında duplicate kontrolü başarılı oldu: kayıt sayısı ve `no=2` değişmedi.
 - Oturumsuz test sonucu: `{"return":0,"mesaj":"Oturum gerekli."}`.
-- `login-customer-id` bu keşif çağrısında eklenmeden API çağrısı başarılı oldu; Google tarafından bu çağrı için gerekli olduğu bildirilmedi.
+- `login-customer-id` ile ve onsuz gerçek V25 çağrıları başarılı oldu; bu akış için zorunlu
+  olmadığı doğrulandı. Uygulama, Manager hesabını açık ve doğru bir değer olarak
+  `withLoginCustomerId(9530538405)` ile kullanır.
 - Composer autoload ve SDK v34.0.0 / V25 sınıf-metot kontrolleri başarılı; PHP lint kontrolleri başarılı.
 
 ### PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi

@@ -14,12 +14,12 @@ require_once dirname(__DIR__) . '/baglayici/google-ads-baglayici.php';
 /**
  * Oturum sahibinin aktif ve refresh token iceren Google OAuth baglantisini alir.
  *
- * @return array{no: int, refresh_token_sifreli: string}|null
+ * @return array{no: int, harici_kimlik: ?string, refresh_token_sifreli: string}|null
  */
 function google_aktif_baglantiyi_al(int $sahip_no): ?array
 {
     $sorgu = veritabani_baglan()->prepare(
-        'SELECT `no`, `refresh_token_sifreli` '
+        'SELECT `no`, `harici_kimlik`, `refresh_token_sifreli` '
         . 'FROM `baglanmis_hesaplar` '
         . 'WHERE `sahip_no` = :sahip_no '
         . 'AND `platform` = :platform '
@@ -36,12 +36,18 @@ function google_aktif_baglantiyi_al(int $sahip_no): ?array
 
     $baglanti = $sorgu->fetch();
 
-    if (!is_array($baglanti) || !isset($baglanti['no'], $baglanti['refresh_token_sifreli'])) {
+    if (
+        !is_array($baglanti)
+        || !isset($baglanti['no'], $baglanti['refresh_token_sifreli'])
+    ) {
         return null;
     }
 
     return [
         'no' => (int) $baglanti['no'],
+        'harici_kimlik' => $baglanti['harici_kimlik'] === null
+            ? null
+            : (string) $baglanti['harici_kimlik'],
         'refresh_token_sifreli' => (string) $baglanti['refresh_token_sifreli'],
     ];
 }
@@ -249,5 +255,99 @@ function google_hesaplarini_kesfet(): array
         'return' => 1,
         'mesaj' => 'Google Ads hesapları başarıyla keşfedildi.',
         'hesaplar' => $cevap_hesaplari,
+    ];
+}
+
+/**
+ * Giris yapmis kullanicinin Manager hesabi altindaki CustomerClient kayitlarini
+ * read-only kesfeder. Mevcut baglanmis_hesaplar semasi parent iliskisini, durum,
+ * para birimi, saat dilimi ve level alanlarini tasimadigi icin DB'ye yazmaz.
+ *
+ * @return array{return: int, mesaj: string, yonetici_customer_id?: string, hesaplar?: array<int, array<string, mixed>>}
+ */
+function google_musteri_hesaplarini_kesfet(): array
+{
+    $sahip_no = oturum_sahip_no();
+
+    if ($sahip_no === null || $sahip_no < 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Oturum gerekli.',
+        ];
+    }
+
+    try {
+        $baglanti = google_aktif_baglantiyi_al($sahip_no);
+    } catch (Throwable $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlı Google Ads hesabı kontrol edilemedi.',
+        ];
+    }
+
+    if ($baglanti === null) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlı Google Ads hesabı bulunamadı.',
+        ];
+    }
+
+    $manager_customer_id = trim((string) ($baglanti['harici_kimlik'] ?? ''));
+
+    if (preg_match('/^[1-9][0-9]*$/', $manager_customer_id) !== 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Google Ads manager hesabı bulunamadı.',
+        ];
+    }
+
+    try {
+        $refresh_token = coz($baglanti['refresh_token_sifreli']);
+
+        if (trim($refresh_token) === '') {
+            throw new GoogleAdsKesifHatasi(
+                'Google OAuth kimlik bilgileri veya refresh token kullanılamadı.',
+                'oauth'
+            );
+        }
+
+        try {
+            $hesaplar = google_ads_musteri_hesaplarini_kesfet(
+                $refresh_token,
+                $manager_customer_id
+            );
+        } finally {
+            unset($refresh_token);
+        }
+    } catch (GoogleAdsKesifHatasi $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Google Ads müşteri hesapları keşfedilemedi.',
+        ];
+    } catch (Throwable $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Google Ads müşteri hesapları keşfedilemedi.',
+        ];
+    }
+
+    return [
+        'return' => 1,
+        'mesaj' => 'Google Ads müşteri hesapları başarıyla keşfedildi.',
+        'yonetici_customer_id' => $manager_customer_id,
+        'hesaplar' => array_map(
+            static function (array $hesap): array {
+                return [
+                    'harici_kimlik' => $hesap['harici_kimlik'],
+                    'hesap_adi' => $hesap['hesap_adi'],
+                    'yonetici' => $hesap['yonetici'],
+                    'durum' => $hesap['durum'],
+                    'para_birimi' => $hesap['para_birimi'],
+                    'saat_dilimi' => $hesap['saat_dilimi'],
+                    'seviye' => $hesap['seviye'],
+                ];
+            },
+            $hesaplar
+        ),
     ];
 }
