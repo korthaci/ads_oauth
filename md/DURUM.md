@@ -58,6 +58,10 @@ ekranından ayrıca doğrulanabilir. Gerçek ve yetkili bir non-manager müşter
 altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapılabilir.
 `CUSTOMER_NOT_ENABLED` olan hesabın durumu Google Ads tarafında etkinleştirilirse keşif tekrar
 çalıştırılabilir. Kampanya sorgusu bu promptta yapılmadı.
+- **Google Ads API Basic Access başvurusu:** 2026-09-05'te yapıldı; sonuç bekleniyor (standart
+  5 iş günü). Onaylanana kadar `createCustomerClient` veya başka bir mutate API çağrısı
+  yapılmayacak. Google'dan gelecek onay veya ek bilgi talebi `korthaci1@gmail.com` adresi
+  üzerinden takip edilecek.
 
 ### PROMPT-12 sonucu — `createCustomerClient` kontrollü API testi
 
