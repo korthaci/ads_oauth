@@ -5,12 +5,15 @@
 > **Güncelleme sorumluluğu kod yazıcı AI'ye (Cline/Requesty) aittir.** Claude bu dosyayı
 > artık düzenlemez, sadece yeni prompt hazırlarken referans olarak okur.
 
-**Son güncelleme:** 2026-09-17
+**Son güncelleme:** 2026-09-18
 
 **Proje durumu:** **AKTİF** — Kapsam netleşti (kişisel kullanım + davetli 1-2 kişi),
 Manager üzerinden hesap oluşturma yaklaşımı terk edildi, kullanıcı kendi hesabını
-kendisi bağlayacak şekilde ilerleniyor. Google Ads OAuth ve Manager/CustomerClient
-read-only keşfi tamamlandı. Meta entegrasyonu bu projenin kapsamı değildir.
+kendisi bağlayacak şekilde ilerliyor. Google Ads API erişim seviyesi şu anda **BASIC**
+(günlük 15.000 işlem, production ve test hesapları için); OAuth Brand Verification ve
+sensitive scope (`adwords`) OAuth app verification tamamlandı. Google Ads OAuth ve
+Manager/CustomerClient read-only keşfi tamamlandı. Meta entegrasyonu bu projenin
+kapsamı değildir.
 
 **Proje adı:** ads_oauth
 **Proje yolu:** `c:/server/htdocs/ads_oauth/`
@@ -55,15 +58,13 @@ alındı, ancak manager hesabı hiyerarşisi için varsayımsal bir login custom
 OAuth kaydının `no=2` değeri ve şifreli refresh token doluluğu korundu. Kampanya, reklam grubu,
 reklam, bütçe, teklif, anahtar kelime veya UI işlemi yapılmadı.
 
-**Sıradaki adım:** Kort kendi Google Ads hesabını (var olan, gerçek bir non-manager hesap)
-OAuth ile bağlayacak. Bağlantı doğrulandıktan sonra kampanya listeleme (eski PROMPT-10'un
-yerine geçen yeni bir prompt ile) bu gerçek hesap üzerinden test edilecek. Manager hesabı
-(9530538405) artık yalnızca Kort'un kendi hesabı olarak kullanılacaksa normal bağlama
-akışına dahil edilir; ayrı bir yönetici/MCC rolü üstlenmeyecek.
-- **Google Ads API Basic Access başvurusu:** 2026-09-05'te yapıldı; sonuç bekleniyor (standart
-  5 iş günü). Onaylanana kadar `createCustomerClient` veya başka bir mutate API çağrısı
-  yapılmayacak. Google'dan gelecek onay veya ek bilgi talebi `korthaci1@gmail.com` adresi
-  üzerinden takip edilecek.
+**Sıradaki adım:** Google Ads API erişimi (Basic Access) tarafında engel kalmadı.
+Sıradaki adım: proje sahibinin kendi Google Ads hesabını (gerçek, var olan bir hesap)
+OAuth ile bağlaması ve bu gerçek hesap üzerinden kampanya listeleme/oluşturma
+akışının test edilmesi. Google Ads API Basic Access başvurusu 2026-09-05'te
+yapılmış ve erişim BASIC seviyesine yükselmiştir (bkz. Karar Günlüğü 2026-09-18);
+referans: `md/GOOGLE-HESAP-KURULUM-REHBERI.md` — Google Cloud/Ads hesap ve erişim
+seviyesi kurulum sürecinin kaydı, kod değişikliği içermez.
 
 ### PROMPT-12 sonucu — `createCustomerClient` kontrollü API testi
 
@@ -404,6 +405,7 @@ akışına dahil edilir; ayrı bir yönetici/MCC rolü üstlenmeyecek.
 | 2026-09-04 | Google ve Meta anahtarları henüz alınmadı; Google Ads PHP client olarak `googleads/google-ads-php:^34.0` seçildi ve `google/apiclient` kaldırıldı | Google Ads API entegrasyonu için resmi PHP client kullanılacak; OAuth ve gerçek API bağlantısı sonraki aşamaya bırakıldı |
 | 2026-09-05 | PROMPT-10 kapsamında gerçek non-manager müşteri hesabı bulunmadığı için kampanya listeleme durduruldu | Manager hesabında kampanya varmış varsayılmayacak; sahte customer ID/kampanya üretilemeyecek, child hesap erişilebilir olduğunda yeniden değerlendirilecek |
 | 2026-09-17 | Sistemin gerçek kapsamı (kişisel kullanım + davetli 1-2 kişi) netleşti; `createCustomerClient` ile Manager altında otomatik hesap oluşturma yaklaşımı terk edildi | Her kullanıcı kendi Google Ads hesabını manuel açacak, sistem sadece OAuth ile bağlayacak; PROMPT-10–15 hattı kapatıldı, kampanya listeleme artık kullanıcının kendi (gerçek, var olan) hesabıyla test edilecek |
+| 2026-09-18 | Google Ads API erişim seviyesi Basic'e yükseltildi (Brand Verification + sensitive scope OAuth app verification tamamlandı, resmi Cloud Console > Google Ads API Overview sayfasından başvuruldu) | Explorer seviyesindeki (2.880 günlük production işlem) kısıtlama kalktı; günlük limit 15.000'e çıktı. Bu, önceki PERMISSION_DENIED / createCustomerClient tıkanıklığıyla ilgisizdir — o yaklaşım zaten ayrı bir kararla terk edilmişti |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
 
