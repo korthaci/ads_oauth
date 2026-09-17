@@ -1,8 +1,8 @@
 <?php
-$sayfa_basligi = 'Panel - ads_oauth';
+$sayfa_basligi = 'Panel - ads oauth';
 require __DIR__ . '/../layout/header.php';
 ?>
-<h1>Hoş geldiniz</h1>
+<h1>ads oauth | Hoş geldiniz</h1>
 <p>Oturum açıldı. Google Ads hesabınızı bağlayarak OAuth akışını başlatabilirsiniz.</p>
 
 <p>
