@@ -12,9 +12,17 @@ Kullanıcı kendi Google Ads / Meta reklam hesabını OAuth ile bağlar, basit b
 temel bilgileri girer (web sitesi, bütçe, hedef kitle), sistem arka planda kampanya kurulumunu
 API üzerinden otomatik yapar ve durumu/metrikleri basit bir panelde gösterir.
 
+Bu sistem yalnızca proje sahibi ve onun kişisel olarak yetkilendirdiği az sayıda (1-2) kişi
+tarafından kullanılacaktır. Kayıt herkese açık değildir; yeni kullanıcı erişimi manuel/davet
+yoluyla verilir. Sistem geniş ölçekli, bilinmeyen kullanıcı kitlesine hizmet veren bir SaaS
+ürünü DEĞİLDİR.
+
 **Bu sistem değildir:**
 - Bir reklam ajansı aracı değildir (kullanıcı adına para akışına dahil olunmaz).
 - Otomatik itiraz/dispute çözücü değildir (bu kısım destek şablonu üretmekle sınırlı).
+- Kullanıcılar adına yeni Google Ads/Meta reklam hesabı oluşturan bir sistem değildir.
+  Her kullanıcı kendi reklam hesabını kendisi, ilgili platformun kendi arayüzünden açar;
+  sistem yalnızca var olan hesabı OAuth ile bağlar.
 
 ---
 
@@ -222,7 +230,9 @@ ads_oauth/
 ## 7. Veri Modeli (Taslak — SQL dosyası ayrı hazırlanacak)
 
 - `site_sahipleri` — sistemi kullanan kişi/işletme kaydı
-- `baglanmis_hesaplar` — hangi kullanıcının hangi Google/Meta hesabına bağlı olduğu, şifreli token'lar
+- `baglanmis_hesaplar` — hangi kullanıcının hangi Google/Meta hesabına bağlı olduğu, şifreli token'lar.
+  Bu tablo, sistemin oluşturduğu değil, kullanıcının kendisinin önceden oluşturmuş olduğu
+  hesapların OAuth bağlantı kaydını tutar.
 - `kampanyalar` — oluşturulan kampanyaların yerel kaydı, platform tarafı kampanya ID'si
 - `senkron_kayitlari` — her senkron çalışmasının log'u (ne zaman, hangi kampanya, sonuç)
 
@@ -248,6 +258,16 @@ kararları bu aşamada uygulanmaz.
 
 Mevcut Google Ads mimarisi, Meta entegrasyonu gelecek diye gereksiz şekilde
 genellenmez veya soyutlanmaz.
+
+---
+
+## 7.1. Kapsam Dışı Bırakılan Yaklaşım — Manager Üzerinden Hesap Oluşturma
+
+`CustomerService.createCustomerClient` ile Manager hesabı altında otomatik müşteri
+hesabı oluşturma yaklaşımı (PROMPT-10 – PROMPT-15'te denenmiştir) kapsam dışı
+bırakılmıştır. Gerekçe: gerçek kullanım senaryosu (proje sahibi + davetli 1-2 kişi)
+bunu gerektirmemektedir; her kullanıcı kendi hesabını kendisi açar. Bu yaklaşıma
+ileride de dönülmeyecektir.
 
 ---
 

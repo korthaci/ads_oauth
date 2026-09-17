@@ -5,11 +5,12 @@
 > **Güncelleme sorumluluğu kod yazıcı AI'ye (Cline/Requesty) aittir.** Claude bu dosyayı
 > artık düzenlemez, sadece yeni prompt hazırlarken referans olarak okur.
 
-**Son güncelleme:** 2026-09-05
+**Son güncelleme:** 2026-09-17
 
-**Proje durumu:** **BEKLEMEDE** — Google Ads OAuth ve Manager/CustomerClient read-only
-keşfi tamamlandı; ancak gerçek bir non-manager müşteri hesabı bulunmadığı için kampanya
-listeleme aşamasına geçilemedi. Meta entegrasyonu bu projenin kapsamı değildir.
+**Proje durumu:** **AKTİF** — Kapsam netleşti (kişisel kullanım + davetli 1-2 kişi),
+Manager üzerinden hesap oluşturma yaklaşımı terk edildi, kullanıcı kendi hesabını
+kendisi bağlayacak şekilde ilerleniyor. Google Ads OAuth ve Manager/CustomerClient
+read-only keşfi tamamlandı. Meta entegrasyonu bu projenin kapsamı değildir.
 
 **Proje adı:** ads_oauth
 **Proje yolu:** `c:/server/htdocs/ads_oauth/`
@@ -34,8 +35,9 @@ gerçekleştirildi; çağrı başarısız oldu ve gerçek bir non-manager müşt
 oluşturulamadı. PROMPT-14 kapsamında kalıcı ve güvenli API exception loglama altyapısı
 uygulandı. PROMPT-15 kapsamında canlı tablo ön koşulu doğrulanarak `createCustomerClient`
 çağrısı tam bir kez gerçek API'ye gönderildi; çağrı `PERMISSION_DENIED` ile başarısız oldu,
-hesap oluşturulmadı ve güvenli hata kaydı kalıcı olarak yazıldı. Proje durumu **BEKLEMEDE**
-olarak korunuyor.
+hesap oluşturulmadı ve güvenli hata kaydı kalıcı olarak yazıldı. 2026-09-17 kararına göre
+`createCustomerClient` ile Manager altında otomatik hesap oluşturma yaklaşımı terk edildi
+(ARCHITECTURE.md §7.1); proje durumu **AKTİF** olarak ilerliyor.
 
 PROMPT-08 kapsamında SDK v34.0.0 içindeki mevcut `V25` API sınıfları kullanıldı. `.env` içindeki
 `GOOGLE_DEVELOPER_TOKEN` mevcut ve gerçek API çağrısında çalıştı. `listAccessibleCustomers()`
@@ -53,11 +55,11 @@ alındı, ancak manager hesabı hiyerarşisi için varsayımsal bir login custom
 OAuth kaydının `no=2` değeri ve şifreli refresh token doluluğu korundu. Kampanya, reklam grubu,
 reklam, bütçe, teklif, anahtar kelime veya UI işlemi yapılmadı.
 
-**Sıradaki adım:** Google Ads API erişim seviyesi Google Ads hesabı/developer token yönetim
-ekranından ayrıca doğrulanabilir. Gerçek ve yetkili bir non-manager müşteri hesabı Manager
-altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapılabilir.
-`CUSTOMER_NOT_ENABLED` olan hesabın durumu Google Ads tarafında etkinleştirilirse keşif tekrar
-çalıştırılabilir. Kampanya sorgusu bu promptta yapılmadı.
+**Sıradaki adım:** Kort kendi Google Ads hesabını (var olan, gerçek bir non-manager hesap)
+OAuth ile bağlayacak. Bağlantı doğrulandıktan sonra kampanya listeleme (eski PROMPT-10'un
+yerine geçen yeni bir prompt ile) bu gerçek hesap üzerinden test edilecek. Manager hesabı
+(9530538405) artık yalnızca Kort'un kendi hesabı olarak kullanılacaksa normal bağlama
+akışına dahil edilir; ayrı bir yönetici/MCC rolü üstlenmeyecek.
 - **Google Ads API Basic Access başvurusu:** 2026-09-05'te yapıldı; sonuç bekleniyor (standart
   5 iş günü). Onaylanana kadar `createCustomerClient` veya başka bir mutate API çağrısı
   yapılmayacak. Google'dan gelecek onay veya ek bilgi talebi `korthaci1@gmail.com` adresi
@@ -116,6 +118,9 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
   tarafındaki müşteri oluşturma yetkisi, developer token erişimi ve hesap uygunluğu yetkili
   hesap yöneticisiyle kontrol edilmelidir. `PERMISSION_DENIED` giderilmeden farklı parametreyle
   tekrar deneme yapılmamalıdır. Yetki/uygunluk doğrulanırsa yeni çağrı için ayrıca onay alınmalıdır.
+- **Not (2026-09-17):** Bu yaklaşım tamamen terk edildi (ARCHITECTURE.md §7.1); `createCustomerClient`
+  yeniden denenmeyecek. Kullanıcı kendi Google Ads hesabını kendisi açar, sistem yalnızca OAuth ile
+  bağlar. Kampanya listeleme, kullanıcının gerçek/var olan hesabıyla yeni bir promptta test edilecek.
 
 ### PROMPT-13 sonucu — `createCustomerClient` hata teşhisi
 
@@ -398,6 +403,7 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
 | 2026-09-05 | `ads_oauth` projesinin mevcut geliştirme kapsamı Google Ads ile sınırlandırıldı; Meta ayrı faza bırakıldı | Google Ads tamamlandığında proje BİTTİ kabul edilecek; Meta OAuth/API/veri modeli/servis/arayüz ve ortak soyutlama bu aşamada uygulanmayacak |
 | 2026-09-04 | Google ve Meta anahtarları henüz alınmadı; Google Ads PHP client olarak `googleads/google-ads-php:^34.0` seçildi ve `google/apiclient` kaldırıldı | Google Ads API entegrasyonu için resmi PHP client kullanılacak; OAuth ve gerçek API bağlantısı sonraki aşamaya bırakıldı |
 | 2026-09-05 | PROMPT-10 kapsamında gerçek non-manager müşteri hesabı bulunmadığı için kampanya listeleme durduruldu | Manager hesabında kampanya varmış varsayılmayacak; sahte customer ID/kampanya üretilemeyecek, child hesap erişilebilir olduğunda yeniden değerlendirilecek |
+| 2026-09-17 | Sistemin gerçek kapsamı (kişisel kullanım + davetli 1-2 kişi) netleşti; `createCustomerClient` ile Manager altında otomatik hesap oluşturma yaklaşımı terk edildi | Her kullanıcı kendi Google Ads hesabını manuel açacak, sistem sadece OAuth ile bağlayacak; PROMPT-10–15 hattı kapatıldı, kampanya listeleme artık kullanıcının kendi (gerçek, var olan) hesabıyla test edilecek |
 
 ## 5. Açık Sorular / Netleşmemiş Noktalar
 
@@ -418,12 +424,12 @@ altında erişilebilir olduğunda kampanya listeleme için yeniden kontrol yapı
 | 08 | PROMPT-08 — Google Ads API İlk Bağlantı ve Hesap Keşfi | Tamamlandı, 1 hesap kaydedildi | `google-hesap-kesfet` action'ı gerçek `listAccessibleCustomers()` ve V25 müşteri temel bilgi sorgusuyla çalıştı. 2 kaynak bulundu; `9530538405` kaydedildi, `4150407743` `CUSTOMER_NOT_ENABLED` nedeniyle atlandı. Developer Token mevcut; erişim seviyesi API yanıtından doğrulanamadı. |
 | 08.1 | PROMPT-08.1 — OAuth Kaydı Veri Güvenliği Düzeltmesi | Uygulandı, canlı kayıt doğrulaması yapılamadı | Test cleanup için repo içinde silme mekanizması bulunmadı; hesap keşfi placeholder seçimi artık yalnızca dolu şifreli refresh token taşıyan gerçek OAuth kaydını kullanıyor. Google Ads API/OAuth tekrar çalıştırılmadı. |
 | 09 | PROMPT-09 — Google Ads Müşteri Hesabı Keşfi ve Meta Sınırının Sabitlenmesi | Tamamlandı | Manager `9530538405` üzerinden V25 `CustomerClient` read-only keşfi gerçek API'de başarılı oldu; 1 kayıt bulundu. `baglanmis_hesaplar` şeması değiştirilmedi. Meta ayrı faz olarak kapsam dışı sabitlendi. |
-| 10 | PROMPT-10 — Google Ads Kampanya Listeleme | Beklemede — gerçek non-manager müşteri hesabı yok | Gerçek V25 kontrolünde yalnızca Manager `9530538405` ve 0 child/non-manager hesap bulundu. Kampanya endpoint'i/servisi yazılmadı; sahte veri, mutate, DB/UI/Meta değişikliği yapılmadı. |
-| 11 | PROMPT-11 — Google Ads Test Müşteri Hesabı Geçişi | Beklemede — gerçek non-manager müşteri hesabı yok | Read-only `listAccessibleCustomers()` ve Manager `9530538405` `CustomerClient` sonucu tekrar doğrulandı; 0 `manager=false` child hesabı bulundu. Kod geliştirilmedi, mevcut OAuth/DB/token korundu. |
-| 12 | PROMPT-12 — Google Ads `createCustomerClient` kontrollü hesap oluşturma testi | Başarısız — proje beklemede | Gerçek çağrı tam 1 kez gönderildi; `Google\\ApiCore\\ApiException` oluştu, yapılandırılmış Ads hata kodu/mesajı elde edilemedi ve tahmin edilmedi. Hesap oluşturulmadı, CustomerClient doğrulaması yapılmadı; DB/OAuth/token değişmedi, geçici test dosyası silindi. |
+| 10 | PROMPT-10 — Google Ads Kampanya Listeleme | Beklemede — gerçek non-manager müşteri hesabı yok (Terk edildi — bkz. 2026-09-17 karar notu, ARCHITECTURE.md §7.1) | Gerçek V25 kontrolünde yalnızca Manager `9530538405` ve 0 child/non-manager hesap bulundu. Kampanya endpoint'i/servisi yazılmadı; sahte veri, mutate, DB/UI/Meta değişikliği yapılmadı. |
+| 11 | PROMPT-11 — Google Ads Test Müşteri Hesabı Geçişi | Beklemede — gerçek non-manager müşteri hesabı yok (Terk edildi — bkz. 2026-09-17 karar notu, ARCHITECTURE.md §7.1) | Read-only `listAccessibleCustomers()` ve Manager `9530538405` `CustomerClient` sonucu tekrar doğrulandı; 0 `manager=false` child hesabı bulundu. Kod geliştirilmedi, mevcut OAuth/DB/token korundu. |
+| 12 | PROMPT-12 — Google Ads `createCustomerClient` kontrollü hesap oluşturma testi | Başarısız — proje beklemede (Terk edildi — bkz. 2026-09-17 karar notu, ARCHITECTURE.md §7.1) | Gerçek çağrı tam 1 kez gönderildi; `Google\\ApiCore\\ApiException` oluştu, yapılandırılmış Ads hata kodu/mesajı elde edilemedi ve tahmin edilmedi. Hesap oluşturulmadı, CustomerClient doğrulaması yapılmadı; DB/OAuth/token değişmedi, geçici test dosyası silindi. |
 | 13 | PROMPT-13 — Google Ads `createCustomerClient` hata teşhisi | Durum 3 — gerçek hata bilgisi elde edilemedi | PROMPT-12'nin ham exception/log kaydı bulunmadığından status, code, güvenli message ve request ID geriye dönük çıkarılamadı. SDK V25 exception accessor'ları credential içermeyen sentetik testle doğrulandı; API/mutate tekrarlanmadı ve kalıcı kod değişikliği yapılmadı. |
 | 14 | PROMPT-14 — `createCustomerClient` hatasını kalıcı ve güvenli yakalama | Tamamlandı — gerçek çağrı yapılmadı | `GoogleAdsException`/`ApiException` allowlist extraction, mesaj redaction, ayrı `api_hata_kayitlari` tablosuna kalıcı log ve mevcut catch entegrasyonu eklendi. `db/sema.sql` değişti; sentetik extraction/DB rollback testi geçti. |
-| 15 | PROMPT-15 — `createCustomerClient` kontrollü gerçek çağrı ve kalıcı log | Başarısız — gerçek çağrı tam 1 kez yapıldı | Canlı `api_hata_kayitlari` tablosu doğrulandı; Manager `9530538405` çağrısı `PERMISSION_DENIED` / `kod=7` ile başarısız oldu. `api_hata_kayitlari` satırı kalıcı yazıldı; `baglanmis_hesaplar` ve OAuth kaydı değişmedi, geçici script silindi. |
+| 15 | PROMPT-15 — `createCustomerClient` kontrollü gerçek çağrı ve kalıcı log | Başarısız — gerçek çağrı tam 1 kez yapıldı (Terk edildi — bkz. 2026-09-17 karar notu, ARCHITECTURE.md §7.1) | Canlı `api_hata_kayitlari` tablosu doğrulandı; Manager `9530538405` çağrısı `PERMISSION_DENIED` / `kod=7` ile başarısız oldu. `api_hata_kayitlari` satırı kalıcı yazıldı; `baglanmis_hesaplar` ve OAuth kaydı değişmedi, geçici script silindi. |
 
 ### PROMPT-08 gerçek API test sonucu ve veri durumu
 
