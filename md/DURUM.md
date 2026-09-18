@@ -341,24 +341,30 @@ seviyesi kurulum sürecinin kaydı, kod değişikliği içermez.
 - **Database kayıt durumu:** Mevcut `baglanmis_hesaplar` tablosu kullanılır; `sahip_no` session
   kullanıcısından, `platform` `google` değerinden alınır. `harici_kimlik` NULL bırakılır;
   mevcut Google kaydı varsa güncellenir, yoksa eklenir. Gerçek DB insert/update testi aşağıdaki
-  gerçek Google callback'i ve refresh token olmadığı için çalıştırılmadı; PDO veritabanı bağlantı
-  kontrolü başarılıdır.
+  gerçek Google callback'i ve refresh token olmadığı için çalıştırılmadı; PDO veritabanı bağlantısı
+  başarılıdır.
 - **Local OAuth test sonucu:** PHP syntax kontrolü, Composer autoload ve `OAuth2TokenBuilder`
-  sınıfı kontrolü başarılıdır. CLI davranış testinde authorization URL, scope, offline/consent,
-  sabit redirect URI, session state, geçersiz state reddi, state tüketimi ve şifreleme round-trip'i
+  sınıfı kontrolü başarılıdır. Authorization URL, scope, offline/consent, config'ten alınan
+  redirect URI, session state, geçersiz state reddi, state tüketimi ve şifreleme round-trip'i
   doğrulandı. PHP built-in server üzerinden `api/index.php?islem=oauth-baslat` isteği JSON
-  standardında unauthenticated hata döndürdü. Vendor dışı 27 PHP dosyasının lint kontrolü başarılıdır.
-- **Hata/engel:** Gerçek Google authorization code callback'i ve refresh token alışverişi,
-  Google Cloud'da aktif kullanıcı onayı/redirect ayarı olmadan çalıştırılamaz. Kullanılan ve
-  Google Cloud OAuth client üzerinde birebir Authorized redirect URI olarak tanımlanması gereken
-  URI şudur: `http://localhost/ads_oauth/api/index.php?islem=oauth-donus`. Mevcut çalışma
-  ortamında gerçek Google authorization code bulunmadığı için gerçek `baglanmis_hesaplar` kaydı ve
-  veritabanındaki gerçek ciphertext doğrulanamadı; PDO bağlantısı başarılıdır. Google Cloud ayarı
-  bu çalışma kapsamında değiştirilmedi.
-- **Sonraki adım:** Google Cloud Authorized redirect URI'yi yukarıdaki değerle doğrula, giriş
-  yapılmış local session ile gerçek OAuth akışını tamamla, DB'deki `refresh_token_sifreli`
-  değerini plaintext olmayan ciphertext olarak doğrula; ardından bağlayıcı ve servis katmanına
-  geç.
+  standardında unauthenticated hata döndürdü. Vendor dışı PHP dosyalarının lint kontrolü başarılıdır.
+- **Teşhis sonucu:** Önceki kodda OAuth redirect URI
+  `http://localhost/ads_oauth/api/index.php?islem=oauth-donus` olarak hardcoded'dı. Bu nedenle
+  production isteği bu URI ile başlatıldığında Google callback'i production'a dönemez ve
+  `redirect_uri_mismatch` ile uygulamaya hiç ulaşmayabilir. Canlı kontrolünde `https://n0n1.tr/`
+  WebSistem ana sayfası, `https://n0n1.tr/ads_oauth/` ve beklenen API yolu ise 404 döndürdü;
+  dolayısıyla n0n1.tr için çalışır callback yolu henüz doğrulanmış değildir.
+- **Uygulanan düzeltme:** `GOOGLE_OAUTH_REDIRECT_URI` artık `.env` içinde zorunlu bir ayardır;
+  authorization URL ve token exchange aynı ayarı kullanır. URI HTTPS olmalı, yalnızca localhost
+  geliştirmesinde HTTP'ye izin verilir ve callback query'si `islem=oauth-donus` içermelidir.
+  Yerel `.env` mevcut localhost callback'iyle dolduruldu; production `.env` ise uygulamanın
+  gerçekten yayınlandığı, Google Cloud'da birebir Authorized redirect URI olarak tanımlanmış
+  callback adresiyle doldurulmalıdır. Gerçek authorization code, refresh token veya DB ciphertext
+  bu teşhiste elde edilmedi.
+- **Sonraki adım:** Uygulamayı canlıda gerçek bir HTTPS path altında yayınla, aynı callback URI'yi
+  production `.env` ve Google Cloud Authorized redirect URIs'e birebir ekle, ardından giriş yapılmış
+  browser session ile gerçek OAuth akışını tamamla; bunun sonrasında `baglanmis_hesaplar`
+  kaydındaki ciphertext doğrulanabilir.
 
 - **PROMPT-07 durumu: Tamamlandı.** Minimum site sahibi kayıt/giriş altyapısı oluşturuldu.
   `site_sahipleri` tablosu kullanıldı; yeni tablo veya şema değişikliği yapılmadı. E-posta
@@ -440,6 +446,7 @@ seviyesi kurulum sürecinin kaydı, kod değişikliği içermez.
 | 13 | PROMPT-13 — Google Ads `createCustomerClient` hata teşhisi | Durum 3 — gerçek hata bilgisi elde edilemedi | PROMPT-12'nin ham exception/log kaydı bulunmadığından status, code, güvenli message ve request ID geriye dönük çıkarılamadı. SDK V25 exception accessor'ları credential içermeyen sentetik testle doğrulandı; API/mutate tekrarlanmadı ve kalıcı kod değişikliği yapılmadı. |
 | 14 | PROMPT-14 — `createCustomerClient` hatasını kalıcı ve güvenli yakalama | Tamamlandı — gerçek çağrı yapılmadı | `GoogleAdsException`/`ApiException` allowlist extraction, mesaj redaction, ayrı `api_hata_kayitlari` tablosuna kalıcı log ve mevcut catch entegrasyonu eklendi. `db/sema.sql` değişti; sentetik extraction/DB rollback testi geçti. |
 | 15 | PROMPT-15 — `createCustomerClient` kontrollü gerçek çağrı ve kalıcı log | Başarısız — gerçek çağrı tam 1 kez yapıldı (Terk edildi — bkz. 2026-09-17 karar notu, ARCHITECTURE.md §7.1) | Canlı `api_hata_kayitlari` tablosu doğrulandı; Manager `9530538405` çağrısı `PERMISSION_DENIED` / `kod=7` ile başarısız oldu. `api_hata_kayitlari` satırı kalıcı yazıldı; `baglanmis_hesaplar` ve OAuth kaydı değişmedi, geçici script silindi. |
+| 16 | OAuth genel hata teşhisi ve redirect URI düzeltmesi | Tamamlandı — production callback yolu beklemede | Hardcoded `localhost` redirect URI doğrulandı; n0n1.tr kökü WebSistem, `/ads_oauth/` ve beklenen API yolu 404. Redirect URI `.env` zorunlu ayara alındı; HTTPS/callback doğrulaması eklendi. Gerçek Google callback/token testi yapılmadı. |
 
 ### PROMPT-08 gerçek API test sonucu ve veri durumu
 

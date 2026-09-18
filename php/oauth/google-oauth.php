@@ -20,8 +20,48 @@ use Google\Auth\OAuth2;
 const GOOGLE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/adwords';
 const GOOGLE_OAUTH_AUTHORIZATION_URI = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_OAUTH_TOKEN_URI = 'https://oauth2.googleapis.com/token';
-const GOOGLE_OAUTH_REDIRECT_URI = 'http://localhost/ads_oauth/api/index.php?islem=oauth-donus';
 const GOOGLE_OAUTH_STATE_SESSION_KEY = 'google_oauth_state';
+
+/**
+ * Google OAuth callback URI'sini config'ten alir ve guvenli bir callback
+ * endpoint'i oldugunu kontrol eder.
+ */
+function google_oauth_redirect_uri_al(): string
+{
+    $uri = trim(config('GOOGLE_OAUTH_REDIRECT_URI'));
+    $parcalar = parse_url($uri);
+
+    if (!is_array($parcalar)) {
+        throw new RuntimeException('Google OAuth redirect URI geçersiz.');
+    }
+
+    $scheme = strtolower((string) ($parcalar['scheme'] ?? ''));
+    $host = strtolower((string) ($parcalar['host'] ?? ''));
+    $query = (string) ($parcalar['query'] ?? '');
+
+    $yerel_http = $scheme === 'http'
+        && in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+
+    if (($scheme !== 'https' && !$yerel_http) || $host === '') {
+        throw new RuntimeException('Google OAuth redirect URI HTTPS olmalıdır.');
+    }
+
+    if (
+        array_key_exists('user', $parcalar)
+        || array_key_exists('pass', $parcalar)
+        || array_key_exists('fragment', $parcalar)
+    ) {
+        throw new RuntimeException('Google OAuth redirect URI geçersiz.');
+    }
+
+    parse_str($query, $query_parametreleri);
+
+    if (($query_parametreleri['islem'] ?? null) !== 'oauth-donus') {
+        throw new RuntimeException('Google OAuth redirect URI callback işlemini belirtmelidir.');
+    }
+
+    return $uri;
+}
 
 /**
  * Google OAuth ayarlarini zorunlu alanlari aciga cikarmadan dogrular.
@@ -51,7 +91,7 @@ function google_oauth_yetkilendirme_urlu_uret(string $state): string
     $ayarlar = google_oauth_ayarlarini_al();
     $oauth = new OAuth2([
         'authorizationUri' => GOOGLE_OAUTH_AUTHORIZATION_URI,
-        'redirectUri' => GOOGLE_OAUTH_REDIRECT_URI,
+        'redirectUri' => google_oauth_redirect_uri_al(),
         'clientId' => $ayarlar['client_id'],
         'clientSecret' => $ayarlar['client_secret'],
         'scope' => GOOGLE_OAUTH_SCOPE,
@@ -118,7 +158,7 @@ function google_oauth_refresh_token_al(string $code): string
     $ayarlar = google_oauth_ayarlarini_al();
     $oauth = new OAuth2([
         'tokenCredentialUri' => GOOGLE_OAUTH_TOKEN_URI,
-        'redirectUri' => GOOGLE_OAUTH_REDIRECT_URI,
+        'redirectUri' => google_oauth_redirect_uri_al(),
         'clientId' => $ayarlar['client_id'],
         'clientSecret' => $ayarlar['client_secret'],
     ]);

@@ -58,6 +58,7 @@ function config_yukle(): array
         'DB_USER',
         'DB_PASS',
         'SIFRELEME_ANAHTARI',
+        'GOOGLE_OAUTH_REDIRECT_URI',
     ];
 
     foreach ($zorunlu_anahtarlar as $anahtar) {
