@@ -95,6 +95,76 @@ function google_panel_baglantisini_al(int $sahip_no): ?array
 }
 
 /**
+ * Erisilebilir Google Ads hesaplari arasindan baglanacak hesabi secer.
+ *
+ * En az bir non-manager hesap varsa ilk non-manager secilir. Non-manager yoksa
+ * mevcut davranisi korumak icin ilk manager hesap secilir. Bu fonksiyon yalnizca
+ * kendisine verilen listeyi degerlendirir; API veya DB cagrisi yapmaz.
+ *
+ * @param array<int, array<string, mixed>> $hesaplar
+ * @return array{
+ *     harici_kimlik: string,
+ *     hesap_adi: ?string,
+ *     yonetici: bool,
+ *     non_manager_sayisi: int,
+ *     manager_sayisi: int
+ * }|null
+ */
+function google_baglanti_hesabini_sec(array $hesaplar): ?array
+{
+    $non_manager_hesaplar = [];
+    $manager_hesaplar = [];
+
+    foreach ($hesaplar as $hesap) {
+        if (
+            !is_array($hesap)
+            || !isset($hesap['harici_kimlik'])
+            || !array_key_exists('yonetici', $hesap)
+        ) {
+            continue;
+        }
+
+        $harici_kimlik = trim((string) $hesap['harici_kimlik']);
+
+        if ($harici_kimlik === '') {
+            continue;
+        }
+
+        $aday = [
+            'harici_kimlik' => $harici_kimlik,
+            'hesap_adi' => $hesap['hesap_adi'] ?? null,
+            'yonetici' => (bool) $hesap['yonetici'],
+        ];
+
+        if ($aday['yonetici']) {
+            $manager_hesaplar[] = $aday;
+        } else {
+            $non_manager_hesaplar[] = $aday;
+        }
+    }
+
+    $adaylar = $non_manager_hesaplar !== []
+        ? $non_manager_hesaplar
+        : $manager_hesaplar;
+
+    if ($adaylar === []) {
+        return null;
+    }
+
+    $secili = $adaylar[0];
+
+    return [
+        'harici_kimlik' => $secili['harici_kimlik'],
+        'hesap_adi' => $secili['hesap_adi'] === null
+            ? null
+            : trim((string) $secili['hesap_adi']),
+        'yonetici' => $secili['yonetici'],
+        'non_manager_sayisi' => count($non_manager_hesaplar),
+        'manager_sayisi' => count($manager_hesaplar),
+    ];
+}
+
+/**
  * Kesfedilen hesaplari duplicate olusturmadan kaydeder.
  *
  * Ilk yeni gercek hesap, OAuth callback'in olusturdugu NULL harici kimlikli ve

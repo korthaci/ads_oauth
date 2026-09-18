@@ -13,6 +13,7 @@ require_once dirname(__DIR__) . '/config.php';
 require_once dirname(__DIR__) . '/oturum.php';
 require_once dirname(__DIR__) . '/sifreleme.php';
 require_once dirname(__DIR__) . '/veritabani.php';
+require_once dirname(__DIR__) . '/servis/hesap-servisi.php';
 
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Auth\OAuth2;
@@ -192,11 +193,16 @@ function google_oauth_credential_dogrula(string $refresh_token): void
 }
 
 /**
- * Refresh token'i mevcut bagli hesap kaydina ekler veya kullanicinin mevcut
- * Google kaydini gunceller. Harici hesap kimligi bu asamada bilincli olarak
- * NULL birakilir.
+ * Secilen Google hesabini ve refresh token'i mevcut bagli hesap kaydina ekler.
+ * Mevcut aktif kayit guncellenir; diger Google kayitlari pasiflenir.
+ *
+ * @param array{harici_kimlik: string, hesap_adi: ?string, yonetici: bool} $secili_hesap
  */
-function google_oauth_refresh_token_kaydet(int $sahip_no, string $refresh_token): void
+function google_oauth_refresh_token_kaydet(
+    int $sahip_no,
+    string $refresh_token,
+    array $secili_hesap
+): void
 {
     $sifreli_refresh_token = sifrele($refresh_token);
     $baglanti = veritabani_baglan();
@@ -207,7 +213,7 @@ function google_oauth_refresh_token_kaydet(int $sahip_no, string $refresh_token)
         $sec = $baglanti->prepare(
             'SELECT `no` FROM `baglanmis_hesaplar` '
             . 'WHERE `sahip_no` = :sahip_no AND `platform` = :platform '
-            . 'ORDER BY `no` DESC LIMIT 1'
+            . 'ORDER BY `aktif` DESC, `no` DESC LIMIT 1 FOR UPDATE'
         );
         $sec->execute([
             'sahip_no' => $sahip_no,
@@ -216,13 +222,27 @@ function google_oauth_refresh_token_kaydet(int $sahip_no, string $refresh_token)
         $hesap = $sec->fetch();
 
         if (is_array($hesap) && isset($hesap['no'])) {
+            $pasiflestir = $baglanti->prepare(
+                'UPDATE `baglanmis_hesaplar` SET `aktif` = 0 '
+                . 'WHERE `sahip_no` = :sahip_no AND `platform` = :platform '
+                . 'AND `no` <> :no'
+            );
+            $pasiflestir->execute([
+                'sahip_no' => $sahip_no,
+                'platform' => 'google',
+                'no' => (int) $hesap['no'],
+            ]);
+
             $guncelle = $baglanti->prepare(
                 'UPDATE `baglanmis_hesaplar` SET '
+                . '`harici_kimlik` = :harici_kimlik, `hesap_adi` = :hesap_adi, '
                 . '`refresh_token_sifreli` = :refresh_token_sifreli, '
                 . '`erisim_token_sifreli` = NULL, `token_bitis` = NULL, `aktif` = 1 '
                 . 'WHERE `no` = :no AND `sahip_no` = :sahip_no AND `platform` = :platform'
             );
             $guncelle->execute([
+                'harici_kimlik' => $secili_hesap['harici_kimlik'],
+                'hesap_adi' => $secili_hesap['hesap_adi'],
                 'refresh_token_sifreli' => $sifreli_refresh_token,
                 'no' => (int) $hesap['no'],
                 'sahip_no' => $sahip_no,
@@ -231,13 +251,16 @@ function google_oauth_refresh_token_kaydet(int $sahip_no, string $refresh_token)
         } else {
             $ekle = $baglanti->prepare(
                 'INSERT INTO `baglanmis_hesaplar` '
-                . '(`sahip_no`, `platform`, `harici_kimlik`, `refresh_token_sifreli`, '
+                . '(`sahip_no`, `platform`, `harici_kimlik`, `hesap_adi`, `refresh_token_sifreli`, '
                 . '`erisim_token_sifreli`, `token_bitis`, `aktif`) '
-                . 'VALUES (:sahip_no, :platform, NULL, :refresh_token_sifreli, NULL, NULL, 1)'
+                . 'VALUES (:sahip_no, :platform, :harici_kimlik, :hesap_adi, '
+                . ':refresh_token_sifreli, NULL, NULL, 1)'
             );
             $ekle->execute([
                 'sahip_no' => $sahip_no,
                 'platform' => 'google',
+                'harici_kimlik' => $secili_hesap['harici_kimlik'],
+                'hesap_adi' => $secili_hesap['hesap_adi'],
                 'refresh_token_sifreli' => $sifreli_refresh_token,
             ]);
         }
@@ -302,7 +325,25 @@ function google_oauth_donus(?array $parametreler = null): array
 
     $refresh_token = google_oauth_refresh_token_al($code);
     google_oauth_credential_dogrula($refresh_token);
-    google_oauth_refresh_token_kaydet($sahip_no, $refresh_token);
+
+    try {
+        $hesaplar = google_ads_hesaplarini_kesfet($refresh_token);
+        $secili_hesap = google_baglanti_hesabini_sec($hesaplar);
+    } catch (Throwable $hata) {
+        unset($refresh_token);
+        throw $hata;
+    }
+
+    if ($secili_hesap === null) {
+        unset($refresh_token);
+
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlanabilecek Google Ads hesabı bulunamadı.',
+        ];
+    }
+
+    google_oauth_refresh_token_kaydet($sahip_no, $refresh_token, $secili_hesap);
 
     unset($refresh_token);
 

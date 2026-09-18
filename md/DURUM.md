@@ -707,3 +707,98 @@ oturum cookie’si bulunmadığından deploy ve yetkili son test burada yapılam
   response bekleniyor: `{"return":0,"mesaj":"Geçersiz API işlemi."}`.
 - Bu oturumda DB’ye yazılmadı, OAuth kayıtlarına/refresh tokenlara dokunulmadı ve
   hiçbir Google Ads mutate/API çağrısı yapılmadı.
+
+---
+
+## PROMPT-17 — Çoklu erişilebilir hesapta non-manager seçimi (2026-09-18)
+
+### Mevcut seçim mantığının gerçek kod incelemesi
+
+- Önceki OAuth callback akışında `C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php`
+  dosyasının HEAD sürümündeki `google_oauth_donus()` (`:262-313`) yalnızca authorization
+  code’dan refresh token alıyor, credential oluşturuyor ve
+  `google_oauth_refresh_token_kaydet()` çağırıyordu. Callback içinde
+  `ListAccessibleCustomers` veya eşdeğer bir erişilebilir hesap listesi çağrısı yoktu.
+- Önceki `google_oauth_refresh_token_kaydet()` (`HEAD` sürümünde `:199-253`) mevcut
+  Google kaydını `ORDER BY no DESC LIMIT 1` ile seçiyordu. Kayıt varsa
+  `UPDATE`, yoksa `INSERT` yapıyordu. `harici_kimlik` callback aşamasında bilinçli olarak
+  `NULL` bırakılıyor, `manager`/`customer.manager` alanı hiç kontrol edilmiyordu.
+- Erişilebilir müşteri listesi OAuth callback’ten ayrı olan
+  `C:\server\htdocs\ads-oauth\php\baglayici\google-ads-baglayici.php`
+  içindeki `google_ads_hesaplarini_kesfet()` (`:419-504`) fonksiyonunda alınıyor:
+  `CustomerService::listAccessibleCustomers()` (`:425-427`) çağrılıyor ve dönen her
+  customer resource için `GoogleAdsService::search()` (`:445-447`) çalıştırılıyor.
+  Salt-okunur GAQL (`:432-434`) `customer.manager` alanını seçiyor; sonuç
+  `getManager()` ile `yonetici` alanına yazılıyor (`:470-475`). Önceki kodda bu alan
+  yalnızca response/kayıt verisine taşınıyor, aktif OAuth hesabını seçmek için
+  kullanılmıyordu. API listesindeki ilk/son hesaba göre bir seçim kriteri yoktu.
+- Ayrı `google-hesap-kesfet` akışındaki
+  `google_kesfedilen_hesaplari_kaydet()` (`C:\server\htdocs\ads-oauth\php\servis\hesap-servisi.php:184-263`)
+  mevcut duplicate kontrolünü koruyarak keşfedilen hesapları kaydetmeye devam eder.
+  PROMPT-17 kapsamında bu endpoint’in tüm keşif listesini saklayan davranışı
+  değiştirilmedi; aktif OAuth hesabı seçimi callback’e uygulandı.
+
+### Uygulanan seçim ve kayıt mantığı
+
+- `C:\server\htdocs\ads-oauth\php\servis\hesap-servisi.php:113-165`
+  içinde salt veri üzerinde çalışan `google_baglanti_hesabini_sec()` eklendi.
+  `yonetici = false` olan hesaplar arasından liste sırasındaki ilk hesap seçiliyor;
+  en az bir non-manager varsa manager hesaplar dikkate alınmıyor. Non-manager yoksa
+  mevcut davranışı korumak için liste sırasındaki ilk manager seçiliyor.
+- `C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php:326-346` içindeki
+  callback artık refresh token doğrulamasından sonra mevcut
+  `google_ads_hesaplarini_kesfet($refresh_token)` read-only akışını çağırıyor ve
+  helper ile seçim yapıyor. Liste alınamazsa veya geçerli hesap yoksa token DB’ye
+  yazılmadan hata akışı sonlanıyor.
+- `google_oauth_refresh_token_kaydet()` (`google-oauth.php:201-276`) artık seçilen
+  `harici_kimlik` ve `hesap_adi` değerlerini refresh token ile aynı transaction içinde
+  kaydediyor. `aktif = 1` olan mevcut Google kaydı `UPDATE` ediliyor; aynı sahibin
+  diğer Google kayıtları `aktif = 0` yapılıyor. Hiç kayıt yoksa yalnızca seçilen hesap
+  için bir `INSERT` yapılıyor. Böylece OAuth tekrarında birden fazla aktif kayıt
+  oluşturulmuyor ve mevcut aktif kayıt (örneğin `no=2`) seçilen non-manager hesap
+  üzerine yazılıyor.
+- Birden fazla non-manager bulunması durumunda seçim arayüzü yapılmadı. Şu an ilk
+  non-manager seçiliyor; helper sonucu `non_manager_sayisi` ve seçilen
+  `harici_kimlik` değerlerini taşıyor. Bu prompt bağlamında iki non-manager olsaydı
+  rapor formatı açıkça “birden fazla non-manager hesap bulundu, şu an X seçildi”
+  şeklindedir. Mevcut gerçek listede görülen aday için beklenen seçim
+  `4150407743` (API formatı; ekranda `415-040-7743`) ve manager aday
+  `9530538405`’in seçilmemesidir.
+
+Sentetik üçlü listede birden fazla non-manager hesap bulundu, şu an
+`4150407743` seçildi. Production OAuth callback’i bu durumla henüz çalıştırılmadığı
+için canlı Google listesindeki birden fazla non-manager sonucu gözlemlendiği iddia
+edilmemektedir.
+
+## PROMPT-17 TODO
+
+- [x] Mevcut seçim mantığı gerçek kod ve satır referanslarıyla belgelendi.
+- [x] Çoklu hesap durumunda non-manager tercih eden mantık eklendi.
+- [x] Gerçek Google API/DB çağrısı yapmayan sentetik seçim testi geçti:
+  - yalnızca manager (`9530538405`) → manager seçildi;
+  - manager (`9530538405`) + non-manager (`4150407743`) → non-manager seçildi.
+- [x] `php -l` kontrolleri geçti:
+  `C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php` ve
+  `C:\server\htdocs\ads-oauth\php\servis\hesap-servisi.php`.
+- [x] Deploy dosyaları listelendi.
+- [x] `DURUM.md` güncellendi.
+
+Ek doğrulamalar: `git diff --check` geçti. `kampanya-servisi.php`,
+`google-ads-baglayici.php` ve `db/sema.sql` bu promptta değiştirilmedi.
+`createCustomerClient`, mutate veya hesap oluşturma çağrısı eklenmedi; refresh token
+şifreleme mekanizması korunuyor.
+
+### PROMPT-17 deploy listesi ve canlı doğrulama
+
+Production’a şu dosyalar birlikte deploy edilmelidir:
+
+1. `C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php`
+2. `C:\server\htdocs\ads-oauth\php\servis\hesap-servisi.php`
+
+`php/baglayici/google-ads-baglayici.php`, `php/servis/kampanya-servisi.php`,
+`api/index.php`, `api/kampanya-listele.php` ve `db/sema.sql` bu prompt için deploy
+edilecek değişiklikler arasında değildir. Production deploy yetkisi ve Kort’un
+yetkili OAuth/tarayıcı session’ı bu çalışma kanalında bulunmadığından canlı OAuth
+başlatma, gerçek `ListAccessibleCustomers` sonucu ve DB’de `4150407743` doğrulaması
+henüz yapılamadı. Deploy sonrası Kort yetkili oturumla OAuth akışını yeniden başlatıp
+aktif kaydın tek kayıt olarak non-manager ID’ye güncellendiğini kontrol etmelidir.
