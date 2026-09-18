@@ -664,3 +664,46 @@ Deploy sonrasında önce oturumsuz aynı URL’nin `Oturum gerekli.` döndürdü
 doğrulanmalı; ardından Kort yetkili oturumuyla gerçek customer/kampanya isteği
 çalıştırılmalıdır. Bu çalışma kanalında production upload yetkisi ve Kort’un
 oturum cookie’si bulunmadığından deploy ve yetkili son test burada yapılamadı.
+
+## PROMPT-16.1 TODO
+
+- [x] `api/index.php` dispatch tablosunda `kampanya-listele` action’ı bulundu ve kök
+      neden teşhis edildi. Yerel ve GitHub `main` sürümünde exact
+      `case 'kampanya-listele':` mevcut; production’daki response eski deploy sürümünü
+      gösteriyor.
+- [x] Kök nedene göre dispatch düzeltmesi yapıldı (ya da düzeltmeye gerek olmadığı,
+      örn. deploy eksikliği olduğu tespit edildi). Yerel/GitHub kodunda dispatch
+      düzeltmesi gerekmiyor; production’a güncel `api/index.php` ve
+      `api/kampanya-listele.php` yüklenmeli.
+- [x] Oturumsuz istekle `{"return":0,"mesaj":"Oturum gerekli."}` doğrulandı
+      (yerel `http://localhost/ads-oauth/api/index.php?islem=kampanya-listele`).
+- [x] Ana sayfanın bağlantı durumunu neden göstermediği teşhis edildi.
+      `index.php` yalnızca oturum sahibini kontrol ediyor; eski
+      `tema/panel/anasayfa.php` ise `baglanmis_hesaplar` sorgusu yapmadan sabit bağlanma
+      metni ve butonu gösteriyordu.
+- [x] Ana sayfa görüntüleme mantığı düzeltildi. `index.php`, yalnızca credential
+      döndürmeyen `google_panel_baglantisini_al()` okumasını çağırıyor; görünüm aktif
+      Google bağlantısını, varsa hesap adı/customer ID’sini gösteriyor. OAuth callback,
+      DB yazma akışı, `kampanya-servisi.php` ve `google-ads-baglayici.php` değiştirilmedi.
+- [ ] Ana sayfa düzeltmesi mümkünse doğrulandı. PHP lint ve sentetik bağlı/bağlı değil
+      görünüm branch kontrolleri başarıyla yapıldı; ancak production deploy ve Kort’un
+      yetkili tarayıcı session cookie’si bu çalışma kanalında bulunmadığından gerçek bağlı
+      hesapla canlı render doğrulanamadı. Deploy sonrası Kort’un tarayıcıdan kontrol etmesi
+      gerekiyor.
+- [x] `DURUM.md` güncellendi (bu TODO listesi dahil, gerçek sonuçlarla).
+
+### PROMPT-16.1 bu oturumdaki gerçek değişiklikler
+
+- `C:\server\htdocs\ads-oauth\index.php`: Oturum sahibi için ana sayfa görüntüleme
+  öncesinde aktif Google bağlantısı read-only olarak yükleniyor.
+- `C:\server\htdocs\ads-oauth\php\servis\hesap-servisi.php`:
+  `google_panel_baglantisini_al()` yalnızca `hesap_adi` ve `harici_kimlik` döndüren,
+  `aktif = 1`, `platform = google` ve dolu şifreli refresh token koşullu görüntüleme
+  sorgusu olarak eklendi; token değeri response/veri yapısına alınmıyor.
+- `C:\server\htdocs\ads-oauth\tema\panel\anasayfa.php`: Bağlı hesapta bağlantı
+  durumu gösteriliyor ve OAuth başlatma butonu gizleniyor; bağlı hesap yoksa mevcut
+  OAuth butonu korunuyor; DB kontrolü hata verirse güvenli uyarı gösteriliyor.
+- Production’a upload/deploy yapılmadı. Production endpoint kontrolünde hâlâ eski
+  response bekleniyor: `{"return":0,"mesaj":"Geçersiz API işlemi."}`.
+- Bu oturumda DB’ye yazılmadı, OAuth kayıtlarına/refresh tokenlara dokunulmadı ve
+  hiçbir Google Ads mutate/API çağrısı yapılmadı.

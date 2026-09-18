@@ -53,6 +53,48 @@ function google_aktif_baglantiyi_al(int $sahip_no): ?array
 }
 
 /**
+ * Ana sayfada gosterilecek aktif Google Ads baglantisini alir.
+ *
+ * Refresh token veya baska credential dondurmez; bu sorgu yalnizca goruntuleme
+ * amaciyla hesap durumunu okur.
+ *
+ * @return array{hesap_adi: ?string, harici_kimlik: ?string}|null
+ */
+function google_panel_baglantisini_al(int $sahip_no): ?array
+{
+    $sorgu = veritabani_baglan()->prepare(
+        'SELECT `hesap_adi`, `harici_kimlik` '
+        . 'FROM `baglanmis_hesaplar` '
+        . 'WHERE `sahip_no` = :sahip_no '
+        . 'AND `platform` = :platform '
+        . 'AND `aktif` = 1 '
+        . 'AND `refresh_token_sifreli` IS NOT NULL '
+        . 'AND `refresh_token_sifreli` <> :bos_token '
+        . 'ORDER BY `no` DESC LIMIT 1'
+    );
+    $sorgu->execute([
+        'sahip_no' => $sahip_no,
+        'platform' => 'google',
+        'bos_token' => '',
+    ]);
+
+    $baglanti = $sorgu->fetch();
+
+    if (!is_array($baglanti)) {
+        return null;
+    }
+
+    return [
+        'hesap_adi' => $baglanti['hesap_adi'] === null
+            ? null
+            : trim((string) $baglanti['hesap_adi']),
+        'harici_kimlik' => $baglanti['harici_kimlik'] === null
+            ? null
+            : trim((string) $baglanti['harici_kimlik']),
+    ];
+}
+
+/**
  * Kesfedilen hesaplari duplicate olusturmadan kaydeder.
  *
  * Ilk yeni gercek hesap, OAuth callback'in olusturdugu NULL harici kimlikli ve

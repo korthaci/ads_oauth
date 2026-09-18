@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/php/servis/kullanici-servisi.php';
+require_once __DIR__ . '/php/servis/hesap-servisi.php';
 
 $mesaj = '';
 
@@ -52,6 +53,15 @@ $sahip_no = oturum_sahip_no();
 if ($sahip_no === null || $sahip_no < 1) {
     require __DIR__ . '/tema/giris.php';
     exit;
+}
+
+$google_panel_baglantisi = null;
+$google_panel_baglanti_kontrol_hatasi = false;
+
+try {
+    $google_panel_baglantisi = google_panel_baglantisini_al($sahip_no);
+} catch (Throwable $hata) {
+    $google_panel_baglanti_kontrol_hatasi = true;
 }
 
 require __DIR__ . '/tema/panel/anasayfa.php';
