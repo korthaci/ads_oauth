@@ -802,3 +802,121 @@ yetkili OAuth/tarayıcı session’ı bu çalışma kanalında bulunmadığında
 başlatma, gerçek `ListAccessibleCustomers` sonucu ve DB’de `4150407743` doğrulaması
 henüz yapılamadı. Deploy sonrası Kort yetkili oturumla OAuth akışını yeniden başlatıp
 aktif kaydın tek kayıt olarak non-manager ID’ye güncellendiğini kontrol etmelidir.
+---
+
+## PROMPT-18 — Hesabı yeniden bağlama butonu ve iskelet dosya taraması (2026-09-18)
+
+### Görev A — Ana sayfada bağlı hesapla yeniden bağlama butonu
+
+- `C:\server\htdocs\ads-oauth\tema\panel\anasayfa.php:27-34`: bağlı dalda
+  “Farklı bir Google Ads hesabı bağla” butonu, `aria-describedby` ile bağlı
+  `google-oauth-yeniden-baglama-uyarisi` açıklaması ve ortak `google-oauth-mesaj`
+  durumu eklendi. Uyarı metni açıkça belirtiyor: yetkilendirme sonrası seçilen hesap,
+  mevcut aktif bağlantı ve bağlı hesap kaydının üzerine yazılır.
+- `C:\server\htdocs\ads-oauth\tema\panel\anasayfa.php:40`: bağlı-değil dalındaki mevcut
+  buton aynı davranışla korundu; `id="google-oauth-baslat"` yerine ortak
+  `google-oauth-baslat-dugmesi` sınıfı kullanılmaya başlandı.
+- `C:\server\htdocs\ads-oauth\tema\panel\anasayfa.php:44-72`: script iki dal için ortak
+  tek handler’a taşındı (`querySelectorAll`). `fetch('api/index.php?islem=oauth-baslat')`
+  ve `window.location.href = cevap.url` davranışı aynen korundu; kopya JS handler yok.
+- `oauth-baslat` bağlıyken engellenmiyor: `google_oauth_baslat()`
+  (`C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php:115-137`) yalnızca oturum
+  kontrolü yapıyor; bağlı hesaba bakmıyor. Kort’un üretimde manuel URL ile çalıştırdığı
+  akış bu davranışı zaten göstermişti. Yerel regresyon:
+  `http://localhost/ads-oauth/api/index.php?islem=oauth-baslat` oturumsuz istek
+  `200 {"return":0,"mesaj":"OAuth başlatmak için giriş yapmalısınız."}` döndü;
+  `islem=kampanya-listele` ise `{"return":0,"mesaj":"Oturum gerekli."}` döndü.
+  Yetkili tarayıcı oturumlu canlı buton testi bu kanalda yapılamadı; Kort’a kaldı.
+
+### Görev B — İskelet/gerçek dosya taraması (vendor hariç 28 PHP dosyası)
+
+Tarama yöntemi: dosya boyutu/satır sayısı listesi, “İskelet” yorum grep’i ve
+`require`/dispatch çağrı araması. Sonuçlar gerçek içerikten okundu, tahmin edilmedi.
+
+Gerçek kod içeren dosyalar (iskelet değil):
+
+- `C:\server\htdocs\ads-oauth\index.php` (form akışı + panel yükleme)
+- `C:\server\htdocs\ads-oauth\api\index.php` (tek API giriş noktası + dispatch)
+- `C:\server\htdocs\ads-oauth\api\kampanya-listele.php` (`ADS_OAUTH_API_INDEX` koruması +
+  `api_kampanya_listele()` köprüsü; PROMPT-16 deseni)
+- `C:\server\htdocs\ads-oauth\php\config.php`, `php\veritabani.php`, `php\oturum.php`,
+  `php\sifreleme.php`
+- `C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php`
+- `C:\server\htdocs\ads-oauth\php\baglayici\google-ads-baglayici.php`
+- `C:\server\htdocs\ads-oauth\php\servis\kullanici-servisi.php`,
+  `php\servis\hesap-servisi.php`, `php\servis\kampanya-servisi.php`
+- `C:\server\htdocs\ads-oauth\tema\giris.php`, `tema\layout\header.php`,
+  `tema\layout\footer.php`, `tema\panel\anasayfa.php`
+
+
+Bu promptta taşınan dosyalar (karar (a) — davranış değişmeden):
+
+1. `C:\server\htdocs\ads-oauth\api\oauth-baslat.php`
+   - Öncesi: 2 satırlık iskelet; gerçek akış PROMPT-06 Revize kararından beri
+     `api\index.php` dispatch’inde doğrudan `google_oauth_baslat()` çağırıyordu
+     (DURUM.md PROMPT-06 Revize kaydı: `api/oauth-baslat.php` ile
+     `api/oauth-donus.php` iskelet ve dispatch için kullanılmıyor).
+   - Şimdi: `api\oauth-baslat.php:11-14` `ADS_OAUTH_API_INDEX` doğrudan erişim
+     koruması (PROMPT-16 `api\kampanya-listele.php` deseni), `:21-24`
+     `api_oauth_baslat()` köprüsü `google_oauth_baslat()`’ı çağırıyor
+     (`php\oauth\google-oauth.php:115-137`). `api\index.php:21` köprüyü require
+     ediyor; `api\index.php:52-54` dispatch artık `api_oauth_baslat()` çağırıyor.
+     Davranış değişmedi (sentetik + localhost HTTP regresyon geçti).
+2. `C:\server\htdocs\ads-oauth\api\oauth-donus.php`
+   - Öncesi: 2 satırlık iskelet; gerçek callback akışı `api\index.php`
+     dispatch’inde doğrudan `google_oauth_donus()` çağrısıydı.
+   - Şimdi: `api\oauth-donus.php:11-14` koruma, `:21-24` `api_oauth_donus()`
+     köprüsü; `api\index.php:22` require, `:56-58` dispatch köprüyü çağırıyor.
+     Davranış değişmedi.
+
+Bilerek iskelet bırakılanlar (karar (b)) ve gerçek mantık/plan durumu:
+
+- `C:\server\htdocs\ads-oauth\php\oauth\meta-oauth.php` ve
+  `C:\server\htdocs\ads-oauth\php\baglayici\meta-ads-baglayici.php`: Meta kapsam
+  dışı (DURUM.md proje durumu: “Meta entegrasyonu bu projenin kapsamı değildir”).
+- `C:\server\htdocs\ads-oauth\api\hesap-sil.php`: bağlantı kaldırma henüz
+  uygulanmadı; dispatch’te yok, gerçek karşılığı yok.
+- `C:\server\htdocs\ads-oauth\api\kampanya-olustur.php` ve
+  `api\kampanya-durdur.php`: kampanya yazma işlemleri henüz uygulanmadı;
+  mevcut kampanya işi PROMPT-16/17 read-only listeleme kapsamındadır.
+- `C:\server\htdocs\ads-oauth\api\senkron-tetikle.php`,
+  `php\servis\senkron-servisi.php`, `php\cron\senkron-calistir.php`: senkron
+  sistemi henüz uygulanmadı; gerçek karşılığı yok.
+- `C:\server\htdocs\ads-oauth\tema\panel\hesap-baglan.php` ve
+  `tema\panel\kampanya-sihirbazi.php`: bu görünümler hiçbir dosyada require
+  edilmiyor (grep doğrulandı); henüz uygulanmamış ilerideki ekranlar.
+
+## PROMPT-18 TODO
+
+- [x] Ana sayfaya “hesabı yeniden bağla” butonu eklendi
+- [x] Buton için oauth-baslat’ın bağlıyken de çalıştığı doğrulandı (kod incelemesi +
+  localhost oturumsuz HTTP regresyon; yetkili canlı tarayıcı testi Kort’ta)
+- [x] Repo genelinde tüm PHP dosyaları iskelet/gerçek diye tarandı (liste bu bölümde)
+- [x] Her iskelet dosya için gerçek mantığın nerede olduğu bulundu ve raporlandı
+- [x] Katman ayrımına aykırı olanlar doğru dosyaya taşındı (regresyon yaratmadan)
+- [x] Bilerek iskelet bırakılanlar (örn. Meta) işaretlendi
+- [x] `php -l` tüm değişen dosyalarda geçti
+- [x] Deploy listesi net şekilde verildi
+- [x] `DURUM.md` güncellendi
+
+### PROMPT-18 doğrulama ve deploy listesi
+
+- `php -l`: `api\index.php`, `api\oauth-baslat.php`, `api\oauth-donus.php`,
+  `tema\panel\anasayfa.php` → hepsi geçti.
+- Sentetikler: korumasız köprü include `exit` (sonraki satır çalışmadı), korumalı
+  köprü fonksiyonları tanımlı ve oturumsuz davranış `return:0` mesajıyla aynı,
+  ana sayfa bağlı/bağlı değil/hata üç dal render testi geçti.
+- `git diff --check` geçti; kapsam kontrolü: yalnızca aşağıdaki 4 kod dosyası
+  değişti; `php\oauth\google-oauth.php`, `php\servis\hesap-servisi.php`,
+  `php\servis\kampanya-servisi.php`, `php\baglayici\google-ads-baglayici.php` ve
+  `db\sema.sql` bu promptta değiştirilmedi.
+- Production deploy listesi (PROMPT-18):
+  1. `C:\server\htdocs\ads-oauth\api\index.php`
+  2. `C:\server\htdocs\ads-oauth\api\oauth-baslat.php`
+  3. `C:\server\htdocs\ads-oauth\api\oauth-donus.php`
+  4. `C:\server\htdocs\ads-oauth\tema\panel\anasayfa.php`
+- PROMPT-17 dosyaları (`php\oauth\google-oauth.php`,
+  `php\servis\hesap-servisi.php`) production’a hâlâ yüklenmediyse PROMPT-18
+  listesiyle birlikte yüklenebilir.
+- Bu oturumda DB’ye yazılmadı, OAuth kayıtlarına/refresh tokenlara dokunulmadı ve
+  hiçbir Google Ads mutate/API çağrısı yapılmadı.

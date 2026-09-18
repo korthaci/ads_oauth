@@ -23,17 +23,27 @@ require __DIR__ . '/../layout/header.php';
     <?php else: ?>
         <p>Customer bilgisi henüz keşfedilmedi.</p>
     <?php endif; ?>
+
+    <p>
+        <button type="button" class="google-oauth-baslat-dugmesi" aria-describedby="google-oauth-yeniden-baglama-uyarisi">Farklı bir Google Ads hesabı bağla</button>
+    </p>
+    <p id="google-oauth-yeniden-baglama-uyarisi">
+        Bu işlem yeni bir Google OAuth bağlantısı başlatır. Yetkilendirme sonrası
+        seçilen hesap, mevcut aktif bağlantı ve bağlı hesap kaydının üzerine yazılır.
+    </p>
+    <p id="google-oauth-mesaj" role="status" aria-live="polite"></p>
+
 <?php else: ?>
     <p>Oturum açıldı. Google Ads hesabınızı bağlayarak OAuth akışını başlatabilirsiniz.</p>
 
     <p>
-        <button type="button" id="google-oauth-baslat">Google Ads hesabını bağla</button>
+        <button type="button" class="google-oauth-baslat-dugmesi">Google Ads hesabını bağla</button>
     </p>
-    <p id="google-oauth-mesaj" role="status" aria-live="polite"></p>
+<?php endif; ?>
 
-    <script>
-    document.getElementById('google-oauth-baslat').addEventListener('click', function () {
-        var dugme = this;
+<script>
+document.querySelectorAll('.google-oauth-baslat-dugmesi').forEach(function (dugme) {
+    dugme.addEventListener('click', function () {
         var mesaj = document.getElementById('google-oauth-mesaj');
 
         dugme.disabled = true;
@@ -58,8 +68,8 @@ require __DIR__ . '/../layout/header.php';
                 mesaj.textContent = 'OAuth başlatılamadı.';
             });
     });
-    </script>
-<?php endif; ?>
+});
+</script>
 
 <p><a href="index.php?islem=cikis">Çıkış yap</a></p>
 <?php require __DIR__ . '/../layout/footer.php'; ?>

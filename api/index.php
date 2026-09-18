@@ -18,6 +18,8 @@ try {
     require_once __DIR__ . '/../php/servis/kullanici-servisi.php';
     require_once __DIR__ . '/../php/servis/hesap-servisi.php';
     require_once __DIR__ . '/kampanya-listele.php';
+    require_once __DIR__ . '/oauth-baslat.php';
+    require_once __DIR__ . '/oauth-donus.php';
     require_once __DIR__ . '/../php/oauth/google-oauth.php';
 
     $islem = $_GET['islem'] ?? null;
@@ -48,11 +50,11 @@ try {
             break;
 
         case 'oauth-baslat':
-            $cevap = google_oauth_baslat();
+            $cevap = api_oauth_baslat();
             break;
 
         case 'oauth-donus':
-            $cevap = google_oauth_donus();
+            $cevap = api_oauth_donus();
             break;
 
         case 'google-hesap-kesfet':
