@@ -531,3 +531,48 @@ seviyesi kurulum sürecinin kaydı, kod değişikliği içermez.
   doğrulanmış değildir; önceki kontrolde ilgili yollar 404 vermiştir.
 - Production için henüz Google Cloud veya production `.env` değişikliği yapılmadı. Bekleyen
   doğru callback URL'si: `https://n0n1.tr/ads-oauth/api/index.php?islem=oauth-donus`.
+
+## 8. 2026-09-18 — Production OAuth genel hata teşhisi (uygulanmamış bulgular)
+
+> Bu bölüm yalnızca teşhistir. Bu görevde `google-oauth.php`, API giriş noktası,
+> `.env`, logger veya başka çalışma kodu değiştirilmedi; yalnızca bu dosyaya bulgu
+> eklendi.
+
+- `C:\server\htdocs\ads-oauth\php\oauth\google-oauth.php` içindeki
+  `google_oauth_redirect_uri_al()` (29-64. satırlar) gerçek HTTP isteğinin şemasını
+  okumaz. `$_SERVER['HTTPS']`, `$_SERVER['SERVER_PORT']`,
+  `$_SERVER['HTTP_X_FORWARDED_PROTO']`, `REQUEST_SCHEME` veya benzeri bir değişken
+  kullanılmamaktadır.
+- Bu fonksiyon önce `config('GOOGLE_OAUTH_REDIRECT_URI')` değerini `trim()` ve
+  `parse_url()` ile ayrıştırır; `scheme` ve `host` değerlerini doğrudan bu `.env`
+  string'inden alır. Dolayısıyla mevcut kontrol **gerçek isteğin şemasını değil,
+  yalnızca yapılandırılmış callback URL'sinin şemasını** denetler.
+- `yerel_http` yalnızca şema `http` ve host `localhost`, `127.0.0.1` veya `::1`
+  olduğunda true olur (42-43. satırlar). 45-47. satırlardaki reddetme koşulu,
+  şema `https` değilse ve bu yerel istisna geçerli değilse veya host boşsa
+  exception fırlatır. Verilen production değeri
+  `https://n0n1.tr/ads-oauth/api/index.php?islem=oauth-donus` bu kontrolü
+  geçmelidir. Reverse proxy'nin PHP'ye boş/false `HTTPS` aktarması bu kontrolü
+  tetikleyen bir neden değildir.
+- Bu URI kontrolü geçersiz bir `.env` değeriyle karşılaşırsa authorization URL'si
+  oluşturulmadan veya token exchange tamamlanmadan exception üretebilir. Böyle bir
+  exception `api/index.php` içindeki genel `catch` bloğuna gider. Ancak production
+  `.env` callback değerinin doğru olduğu verilen bağlamda, HTTPS kontrolü mevcut
+  teşhisin kök nedeni olarak desteklenmemektedir.
+- `api/index.php` 72-81. satırlardaki genel `catch`, önce yalnızca
+  `function_exists('google_ads_hata_kaydi_yaz')` true ise
+  `google_ads_hata_kaydi_yaz('api.index', $hata)` çağrısını yapar; ardından
+  kullanıcıya sabit `İşlem gerçekleştirilemedi.` cevabını döndürür. Bu nedenle
+  logger fonksiyonu henüz tanımlanmadan include/başlatma aşamasında exception
+  oluşursa, aynı genel cevap log çağrısına ulaşmadan üretilebilir. Production
+  logunun gerçekten neden boş olduğu bu yerel kod incelemesiyle tek başına
+  kesinleştirilemez; canlı PHP error logu ve deployed dosyalar ayrıca kontrol
+  edilmelidir.
+- `İşlem gerçekleştirilemedi.` tam metninin kod içindeki üç üretim noktası:
+  `C:\server\htdocs\ads-oauth\api\index.php` 80. satır (API genel `catch`),
+  `C:\server\htdocs\ads-oauth\index.php` 33. satır (form cevap mesajı
+  fallback'i) ve aynı dosyanın 35. satırı (form genel `catch`). Paneldeki OAuth
+  JavaScript'i bu tam metni üretmez; API'den gelen `mesaj` alanını gösterir.
+  İstek/JSON hatasında farklı olarak `OAuth başlatılamadı.` mesajını yazar.
+- Bu bulgular henüz uygulanmamıştır. Özellikle `X-Forwarded-Proto` kontrolü veya
+  `error_log()` eklenmesi bu teşhis aşamasında yapılmadı.
