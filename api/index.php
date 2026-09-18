@@ -6,6 +6,8 @@
  * ve JSON response doner; is mantigi bu dosyada tutulmaz.
  */
 
+define('ADS_OAUTH_API_INDEX', true);
+
 function api_json_dondur(array $cevap): void
 {
     header('Content-Type: application/json; charset=utf-8');
@@ -15,6 +17,7 @@ function api_json_dondur(array $cevap): void
 try {
     require_once __DIR__ . '/../php/servis/kullanici-servisi.php';
     require_once __DIR__ . '/../php/servis/hesap-servisi.php';
+    require_once __DIR__ . '/kampanya-listele.php';
     require_once __DIR__ . '/../php/oauth/google-oauth.php';
 
     $islem = $_GET['islem'] ?? null;
@@ -58,6 +61,10 @@ try {
 
         case 'google-musteri-hesaplari':
             $cevap = google_musteri_hesaplarini_kesfet();
+            break;
+
+        case 'kampanya-listele':
+            $cevap = api_kampanya_listele();
             break;
 
         default:

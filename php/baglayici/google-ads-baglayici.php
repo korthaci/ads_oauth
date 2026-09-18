@@ -15,6 +15,8 @@ use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsException;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsClient;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\V25\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V25\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V25\Enums\CustomerStatusEnum\CustomerStatus;
 use Google\Ads\GoogleAds\V25\Services\ListAccessibleCustomersRequest;
 use Google\Ads\GoogleAds\V25\Services\SearchGoogleAdsRequest;
@@ -598,6 +600,152 @@ function google_ads_musteri_hesaplarini_kesfet(
         throw $hata;
     } catch (Throwable $hata) {
         google_ads_hata_kaydi_yaz('GoogleAdsService::search customer_client', $hata);
+        $kategori = google_ads_hata_kategorisi($hata);
+
+        throw new GoogleAdsKesifHatasi(
+            google_ads_hata_mesaji($kategori),
+            $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * Tek bir customer kaydinin read-only temel bilgilerini sorgular.
+ *
+ * Bu fonksiyon yalnizca GoogleAdsService.search() kullanir. CustomerService,
+ * mutate veya hesap olusturma cagrisi yapmaz.
+ *
+ * @return array{
+ *     customer_id: string,
+ *     descriptive_name: ?string,
+ *     manager: bool,
+ *     status: string,
+ *     currency_code: ?string,
+ *     time_zone: ?string
+ * }
+ */
+function google_ads_musteri_bilgilerini_al(
+    string $refresh_token,
+    string $customer_id
+): array {
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Google Ads customer ID geçersiz.', 'api');
+    }
+
+    $client = google_ads_client_olustur($refresh_token, (int) $customer_id);
+
+    try {
+        $gaql = 'SELECT customer.id, customer.descriptive_name, customer.manager, '
+            . 'customer.status, customer.currency_code, customer.time_zone '
+            . 'FROM customer LIMIT 1';
+        $search_response = $client->getGoogleAdsServiceClient()->search(
+            SearchGoogleAdsRequest::build($customer_id, $gaql)
+        );
+
+        foreach ($search_response as $row) {
+            $customer = $row->getCustomer();
+
+            if ($customer === null) {
+                continue;
+            }
+
+            $id = trim((string) $customer->getId());
+            $descriptive_name = trim((string) $customer->getDescriptiveName());
+            $currency_code = trim((string) $customer->getCurrencyCode());
+            $time_zone = trim((string) $customer->getTimeZone());
+
+            return [
+                'customer_id' => $id === '' ? $customer_id : $id,
+                'descriptive_name' => $descriptive_name === '' ? null : $descriptive_name,
+                'manager' => (bool) $customer->getManager(),
+                'status' => CustomerStatus::name((int) $customer->getStatus()),
+                'currency_code' => $currency_code === '' ? null : $currency_code,
+                'time_zone' => $time_zone === '' ? null : $time_zone,
+            ];
+        }
+
+        throw new GoogleAdsKesifHatasi(
+            'Google Ads customer bilgisi bulunamadı.',
+            'api'
+        );
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('GoogleAdsService::search customer', $hata);
+        $kategori = google_ads_hata_kategorisi($hata);
+
+        throw new GoogleAdsKesifHatasi(
+            google_ads_hata_mesaji($kategori),
+            $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * Bir non-manager customer hesabinin kampanyalarini read-only olarak listeler.
+ *
+ * Bu fonksiyon yalnizca GoogleAdsService.search() kullanir ve API'den gelen
+ * verileri yerel kampanyalar tablosuna yazmaz.
+ *
+ * @return array<int, array{
+ *     id: string,
+ *     name: string,
+ *     status: string,
+ *     advertising_channel_type: string,
+ *     budget_amount_micros: int|string|null
+ * }>
+ */
+function google_ads_kampanyalari_listele(
+    string $refresh_token,
+    string $customer_id
+): array {
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Google Ads customer ID geçersiz.', 'api');
+    }
+
+    $client = google_ads_client_olustur($refresh_token, (int) $customer_id);
+
+    try {
+        $gaql = 'SELECT campaign.id, campaign.name, campaign.status, '
+            . 'campaign.advertising_channel_type, campaign_budget.amount_micros '
+            . 'FROM campaign ORDER BY campaign.id';
+        $search_response = $client->getGoogleAdsServiceClient()->search(
+            SearchGoogleAdsRequest::build($customer_id, $gaql)
+        );
+        $kampanyalar = [];
+
+        foreach ($search_response as $row) {
+            $campaign = $row->getCampaign();
+
+            if ($campaign === null) {
+                continue;
+            }
+
+            $budget = $row->getCampaignBudget();
+            $budget_amount_micros = null;
+
+            if ($budget !== null && $budget->hasAmountMicros()) {
+                $budget_amount_micros = $budget->getAmountMicros();
+            }
+
+            $kampanyalar[] = [
+                'id' => (string) $campaign->getId(),
+                'name' => (string) $campaign->getName(),
+                'status' => CampaignStatus::name((int) $campaign->getStatus()),
+                'advertising_channel_type' => AdvertisingChannelType::name(
+                    (int) $campaign->getAdvertisingChannelType()
+                ),
+                'budget_amount_micros' => $budget_amount_micros,
+            ];
+        }
+
+        return $kampanyalar;
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('GoogleAdsService::search campaign', $hata);
         $kategori = google_ads_hata_kategorisi($hata);
 
         throw new GoogleAdsKesifHatasi(

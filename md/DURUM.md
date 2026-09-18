@@ -576,3 +576,55 @@ seviyesi kurulum sürecinin kaydı, kod değişikliği içermez.
   İstek/JSON hatasında farklı olarak `OAuth başlatılamadı.` mesajını yazar.
 - Bu bulgular henüz uygulanmamıştır. Özellikle `X-Forwarded-Proto` kontrolü veya
   `error_log()` eklenmesi bu teşhis aşamasında yapılmadı.
+
+## 9. 2026-09-18 — PROMPT-16: Bağlanan hesabın doğrulanması ve salt-okunur kampanya listeleme
+
+### Uygulanan kod
+
+- `php/baglayici/google-ads-baglayici.php` içine yalnızca `GoogleAdsService.search()` kullanan
+  iki salt-okunur çağrı eklendi:
+  - `google_ads_musteri_bilgilerini_al()`: `customer.id`, `customer.descriptive_name`,
+    `customer.manager`, `customer.status`, `customer.currency_code` ve `customer.time_zone`
+    alanlarını sorgular.
+  - `google_ads_kampanyalari_listele()`: `campaign.id`, `campaign.name`, `campaign.status`,
+    `campaign.advertising_channel_type` ve `campaign_budget.amount_micros` alanlarını sorgular.
+- `php/servis/kampanya-servisi.php` içinde `kampanyalari_listele()` eklendi. Önce en güncel
+  aktif ve refresh token içeren Google bağlantısını okur, customer bilgilerini doğrular;
+  yalnızca `manager = false` sonucunda kampanya sorgusunu çalıştırır. Kampanyalar yerel
+  `kampanyalar` tablosuna yazılmaz.
+- `api/kampanya-listele.php` yalnızca `api/index.php` üzerinden erişilecek şekilde korundu ve
+  `api/index.php?islem=kampanya-listele` dispatch'i eklendi.
+- Çağrı öncesi/sonrası `baglanmis_hesaplar` snapshot'ı; kayıt sayısı, aktif kayıt numarası,
+  `harici_kimlik` ve aktif durumu içerecek şekilde credential olmadan raporlanır.
+- Google Ads hata kategorisi ve mevcut `google_ads_hata_kaydi_yaz()` loglama mekanizması
+  korunmuştur. Refresh token, developer token, OAuth secret veya başka credential response'a
+  ya da DURUM.md'ye yazılmaz.
+
+### PROMPT-16 gerçek sonuç durumu
+
+- **Adım A sonucu: a/b/c sınıflandırması henüz yapılamadı.** Bu çalışma kanalında yetkili
+  tarayıcı oturumu/cookie bulunmadığı için gerçek kullanıcı oturumuyla `baglanmis_hesaplar`
+  kaydı okunamadı ve gerçek Google Ads `customer` sorgusu çalıştırılamadı. Bu nedenle gerçek
+  customer ID, `manager` değeri, hesap durumu, para birimi ve saat dilimi hakkında tahmini
+  değer yazılmadı.
+- **Adım B sonucu: çalıştırılmadı.** Adım A'nın gerçek sonucu doğrulanmadığı için kampanya
+  sorgusu ve kampanya listesi hakkında gerçek sayı, ad veya durum raporlanmadı.
+- Kodun canlı oturumsuz HTTP doğrulaması başarılıdır:
+  - `GET /ads-oauth/api/index.php?islem=kampanya-listele` gerçek response:
+    `{"return":0,"mesaj":"Oturum gerekli."}`
+  - `GET /ads-oauth/api/kampanya-listele.php` doğrudan erişimi gerçek HTTP `404` döndürdü.
+  - `GET /ads-oauth/api/index.php?islem=google-musteri-hesaplari` ve
+    `GET /ads-oauth/api/index.php?islem=google-hesap-kesfet` oturumsuz olarak
+    `{"return":0,"mesaj":"Oturum gerekli."}` döndürdü.
+- Bu prompt doğrulaması sırasında `baglanmis_hesaplar` kaydı, OAuth kaydı, refresh token,
+  DB şeması ve başka credential değiştirilmedi; herhangi bir mutate çağrısı yapılmadı.
+
+### Net sonraki adım
+
+Yetkili giriş oturumu açıkken `api/index.php?islem=kampanya-listele` çağrısı bir kez
+çalıştırılmalıdır. Response içindeki credential içermeyen `hesap` ve
+`baglanmis_hesap_durumu` alanları kaydedilerek Adım A gerçek sonucu a/b/c olarak
+`DURUM.md`'ye eklenmelidir. Sonuç (a) ise kampanya listeleme yapılmadan durulmalı; sonuç
+(b) ise aynı response içindeki gerçek kampanya sayısı ile ilk kampanyaların adı/durumu
+raporlanmalı; sonuç (c) ise response'taki gerçek Google Ads hata kategorisi ve mevcut
+güvenli hata kaydı raporlanmalıdır.
