@@ -628,3 +628,39 @@ Yetkili giriş oturumu açıkken `api/index.php?islem=kampanya-listele` çağrı
 (b) ise aynı response içindeki gerçek kampanya sayısı ile ilk kampanyaların adı/durumu
 raporlanmalı; sonuç (c) ise response'taki gerçek Google Ads hata kategorisi ve mevcut
 güvenli hata kaydı raporlanmalıdır.
+
+## 10. 2026-09-18 — PROMPT-16.1: `kampanya-listele` dispatch kontrolü
+
+- Yerel `C:\server\htdocs\ads-oauth\api\index.php` dosyasının 66–68. satırlarında
+  exact route mevcuttur:
+  `case 'kampanya-listele':` ve hemen ardından `api_kampanya_listele()` çağrısı.
+- Aynı dosyanın 20. satırında `api/kampanya-listele.php` include edilir; wrapper’ın
+  21–24. satırlarında `api_kampanya_listele()` doğrudan
+  `kampanyalari_listele()` servisine yönlenir. `oauth-donus`,
+  `google-hesap-kesfet` ve `google-musteri-hesaplari` de aynı `switch ($islem)`
+  dispatch mekanizmasındadır. Action string’inde `kampanya_listele`,
+  `kampanyalari-listele` veya case/boşluk varyantı yoktur.
+- Yerel canlı HTTP kontrolü:
+  `GET http://localhost/ads-oauth/api/index.php?islem=kampanya-listele`
+  → `{"return":0,"mesaj":"Oturum gerekli."}`. Bu, yerel route’un bulunduğunu
+  ve isteğin session kontrolüne ulaştığını doğrular.
+- Production canlı HTTP kontrolü:
+  `GET https://n0n1.tr/ads-oauth/api/index.php?islem=kampanya-listele`
+  → `{"return":0,"mesaj":"Geçersiz API işlemi."}`. Bu response production
+  `api/index.php` dosyasının bu route’u içeren sürümü çalıştırmadığını gösterir.
+- GitHub `main` dalındaki `api/index.php` de exact `case 'kampanya-listele'`
+  route’unu içeriyor; GitHub Contents API dosya SHA’sı:
+  `c1f5c0fa4c25de74985136c998a5d4412b170837`. Bu nedenle gerçek kodda string
+  düzeltmesi gerekmiyor; kök neden production upload/deploy sürüm farkıdır.
+- Bu promptta yalnızca bu durum tespiti kaydedildi. `kampanya-servisi.php`,
+  `google-ads-baglayici.php`, DB şeması, OAuth kayıtları ve refresh tokenlar
+  değiştirilmedi; hiçbir Google Ads mutate/API çağrısı yapılmadı.
+
+### PROMPT-16.1 net sonraki adım
+
+Yerel/GitHub’daki güncel `api/index.php` ve bağımlı `api/kampanya-listele.php`
+dosyaları production `n0n1.tr/ads-oauth/api/` dizinine upload/deploy edilmelidir.
+Deploy sonrasında önce oturumsuz aynı URL’nin `Oturum gerekli.` döndürdüğü
+doğrulanmalı; ardından Kort yetkili oturumuyla gerçek customer/kampanya isteği
+çalıştırılmalıdır. Bu çalışma kanalında production upload yetkisi ve Kort’un
+oturum cookie’si bulunmadığından deploy ve yetkili son test burada yapılamadı.
