@@ -498,3 +498,36 @@ seviyesi kurulum sürecinin kaydı, kod değişikliği içermez.
 
 *(Her yeni prompt dosyası oluşturulduğunda bu tabloya satır eklenir: numara, dosya adı, durum
 [Bekliyor / AI'ye verildi / Tamamlandı / Revizyon gerekli], kısa not.)*
+
+## 7. 2026-09-18 — `ads_oauth` → `ads-oauth` / OAuth callback inceleme bulguları
+
+> Bu bölüm yalnızca inceleme sonucudur. Bu inceleme sırasında PHP, config, `.env`,
+> `.env.sample`, Composer veya klasör adında düzeltme/yeniden adlandırma yapılmadı.
+
+- Gerçek callback formatı router üzerinden üretilmektedir: **b)**
+  `.../api/index.php?islem=oauth-donus`. `php/oauth/google-oauth.php` içinde
+  `google_oauth_redirect_uri_al()` değeri `config('GOOGLE_OAUTH_REDIRECT_URI')` üzerinden
+  alır; authorization URL oluşturulurken satır 94'te, token exchange sırasında satır 161'de
+  aynı değer kullanılır. Kodda callback path'ini domain ile birleştiren sabit bir parça yoktur.
+- `api/oauth-baslat.php` ve `api/oauth-donus.php` yalnızca iskelet dosyalardır. Gerçek HTTP
+  dispatch'i `api/index.php` içindeki `oauth-baslat` ve `oauth-donus` action'larıdır.
+- `.env.sample` satır 4'teki örnek router formatı b ile yapısal olarak uyumludur; ancak
+  `https://example.com/ads_oauth/api/index.php?islem=oauth-donus` değeri production için
+  doğru değildir: domain placeholder'dır ve klasör adı eski `ads_oauth` biçimindedir.
+- `php/config.php` satır 55-67 arasında `GOOGLE_OAUTH_REDIRECT_URI` zorunlu anahtar olarak
+  doğrulanmaktadır; `.env` yoksa veya anahtar eksik/boşsa hata fırlatılır.
+- Yerel `.env` içinde callback değeri router formatındadır, fakat path hâlâ `ads_oauth` ve
+  `localhost` kullanmaktadır. Ayrıca satır 10'da `SIFRELEME_ANAHTARI` değerinin sonuna
+  callback ayarının yapışmış olduğu, satır 11'de de callback ayarının tekrar bulunduğu görüldü.
+  Hassas değer rapora kopyalanmadı; bu biçimsel bozukluk henüz düzeltilmedi.
+- `ads-outh` yazımı proje dosyalarında bulunmadı. Production'daki önceki yanlış yol bu repo
+  incelemesinde doğrulanabilir bir dosya içi referans olarak bulunamadı.
+- Kök klasör adı değişikliğinden PHP include/require tarafında etkilenmesi beklenen sabit
+  mutlak yol bulunmadı. Kod yolları `__DIR__` veya `dirname(__DIR__)` tabanlıdır. Buna karşılık
+  `.env.sample`, yerel `.env`, dokümantasyon, UI metinleri, `composer.json` package adı ve
+  veritabanı adı gibi fiziksel klasör yolu olmayan eski `ads_oauth` referansları tespit edildi.
+- `.htaccess` içindeki `RewriteBase /ads-oauth/` ve `ErrorDocument /ads-oauth/` yeni klasör
+  adına göre zaten doğrudur. Production uygulama yolu/callback canlıda hâlâ yayınlanmış veya
+  doğrulanmış değildir; önceki kontrolde ilgili yollar 404 vermiştir.
+- Production için henüz Google Cloud veya production `.env` değişikliği yapılmadı. Bekleyen
+  doğru callback URL'si: `https://n0n1.tr/ads-oauth/api/index.php?islem=oauth-donus`.
