@@ -5,7 +5,7 @@
  *
  * Bu dosya yalnizca api/index.php tarafindan include edilir; HTTP giris noktasi
  * olarak dogrudan calistirilamaz. Is mantigi php/servis/kampanya-servisi.php
- * icindedir.
+ * icindedir. 
  */
 
 if (!defined('ADS_OAUTH_API_INDEX')) {

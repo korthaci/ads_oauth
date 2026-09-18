@@ -3,7 +3,7 @@
 /**
  * Genel API HTTP giris noktasi.
  * Kullanici ve OAuth islemlerini ilgili servis/teknik katmanlara dispatch eder
- * ve JSON response doner; is mantigi bu dosyada tutulmaz.
+ * ve JSON response doner; is mantigi bu dosyada tutulmaz. 
  */
 
 define('ADS_OAUTH_API_INDEX', true);
