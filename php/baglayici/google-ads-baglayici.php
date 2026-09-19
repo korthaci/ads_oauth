@@ -15,11 +15,41 @@ use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsException;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsClient;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\V25\Common\Ad;
+use Google\Ads\GoogleAds\V25\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V25\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V25\Common\LanguageInfo;
+use Google\Ads\GoogleAds\V25\Common\LocationInfo;
+use Google\Ads\GoogleAds\V25\Common\MaximizeClicks;
+use Google\Ads\GoogleAds\V25\Common\NetworkSettings;
+use Google\Ads\GoogleAds\V25\Common\ResponsiveSearchAdInfo;
+use Google\Ads\GoogleAds\V25\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V25\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
+use Google\Ads\GoogleAds\V25\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V25\Enums\AdGroupTypeEnum\AdGroupType;
 use Google\Ads\GoogleAds\V25\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V25\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V25\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V25\Enums\CustomerStatusEnum\CustomerStatus;
+use Google\Ads\GoogleAds\V25\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V25\Resources\AdGroup;
+use Google\Ads\GoogleAds\V25\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V25\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V25\Resources\Campaign;
+use Google\Ads\GoogleAds\V25\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V25\Resources\CampaignCriterion;
+use Google\Ads\GoogleAds\V25\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V25\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V25\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V25\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V25\Services\CampaignCriterionOperation;
+use Google\Ads\GoogleAds\V25\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V25\Services\ListAccessibleCustomersRequest;
+use Google\Ads\GoogleAds\V25\Services\LocationNames;
+use Google\Ads\GoogleAds\V25\Services\MutateGoogleAdsRequest;
+use Google\Ads\GoogleAds\V25\Services\MutateOperation;
 use Google\Ads\GoogleAds\V25\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest;
 use Google\ApiCore\ApiException;
 
 /**
@@ -751,6 +781,399 @@ function google_ads_kampanyalari_listele(
         throw new GoogleAdsKesifHatasi(
             google_ads_hata_mesaji($kategori),
             $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * Girilen serbest metin konum adini Google Ads geoTargetConstant kaynak adina
+ * cevirir. Salt-okunur calisir: GeoTargetConstantService.suggestGeoTargetConstants
+ * kullanir; mutate cagrisi yapmaz.
+ *
+ * Yalnizca tam (buyuk/kucuk harf duyarsiz) isim eslesmesi kabul edilir; en yakin
+ * eslesme sessizce secilmez. Tam eslesme yoksa, bulunabilirse ornek onerilerle
+ * birlikte hata firlatilir.
+ *
+ * @return array{resource_name: string, name: string}
+ */
+function google_ads_konum_onerilerini_al(
+    string $refresh_token,
+    string $konum
+): array {
+    $konum = trim($konum);
+
+    if ($konum === '') {
+        throw new GoogleAdsKesifHatasi('Hedef konum boş olamaz.', 'girdi');
+    }
+
+    $client = google_ads_client_olustur($refresh_token);
+
+    try {
+        $istek = (new SuggestGeoTargetConstantsRequest())
+            ->setLocale('tr')
+            ->setCountryCode('TR')
+            ->setLocationNames(
+                (new LocationNames())->setNames([$konum])
+            );
+
+        $yanit = $client->getGeoTargetConstantServiceClient()
+            ->suggestGeoTargetConstants($istek);
+
+        $oneriler = [];
+        $tam_eslesenler = [];
+        $arama_ad = mb_strtolower($konum, 'UTF-8');
+        $tarama_limiti = 0;
+
+        foreach ($yanit as $oneri) {
+            if (++$tarama_limiti > 50) {
+                break;
+            }
+
+            $sabit = $oneri->getGeoTargetConstant();
+
+            if ($sabit === null) {
+                continue;
+            }
+
+            $ad = trim((string) $sabit->getName());
+            $kaynak = trim((string) $sabit->getResourceName());
+
+            if (
+                $ad === ''
+                || $kaynak === ''
+                || preg_match('/^geoTargetConstants\/[0-9]+$/', $kaynak) !== 1
+            ) {
+                continue;
+            }
+
+            $kayit = [
+                'resource_name' => $kaynak,
+                'name' => $ad,
+            ];
+
+            $oneriler[] = $kayit;
+
+            if (mb_strtolower($ad, 'UTF-8') === $arama_ad) {
+                $tam_eslesenler[] = $kayit;
+            }
+        }
+
+        if (count($tam_eslesenler) === 1) {
+            return $tam_eslesenler[0];
+        }
+
+        if (count($tam_eslesenler) > 1) {
+            throw new GoogleAdsKesifHatasi(
+                'Aynı adlı birden fazla Google Ads konumu bulundu; kampanya için '
+                . 'konumu daha belirgin yazın.',
+                'girdi'
+            );
+        }
+
+        if ($oneriler === []) {
+            throw new GoogleAdsKesifHatasi(
+                'Girilen konum bulunamadı; farklı yazmayı deneyin.',
+                'girdi'
+            );
+        }
+
+        $ornekler = implode(', ', array_column(
+            array_slice($oneriler, 0, 5),
+            'name'
+        ));
+
+        throw new GoogleAdsKesifHatasi(
+            'Girilen konum için tam eşleşme bulunamadı. Örnek öneriler: '
+            . $ornekler,
+            'girdi'
+        );
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz(
+            'GeoTargetConstantService::suggestGeoTargetConstants',
+            $hata
+        );
+        $kategori = google_ads_hata_kategorisi($hata);
+
+        throw new GoogleAdsKesifHatasi(
+            google_ads_hata_mesaji($kategori),
+            $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * mutate yanitindaki kampanya kaynak adindan sayisal kampanya ID'sini alir.
+ */
+function google_ads_kampanya_id_al(string $kampanya_kaynagi): ?string
+{
+    if (
+        preg_match(
+            '/^customers\/[0-9]+\/campaigns\/([0-9]+)$/',
+            $kampanya_kaynagi,
+            $eslesme
+        ) !== 1
+    ) {
+        return null;
+    }
+
+    $kampanya_id = $eslesme[1];
+
+    return ltrim($kampanya_id, '0') === ''
+        ? '0'
+        : ltrim($kampanya_id, '0');
+}
+
+/**
+ * Bagli non-manager Google Ads hesabinda yayina hazir bir Search kampanyasi
+ * olusturur: butce, kampanya, konum/dil hedefleri, reklam grubu, anahtar
+ * kelimeler ve Responsive Search Ad tek atomik GoogleAdsService::mutate
+ * isteginde (geici kaynak adlariyla) olusturulur. partial_failure kapalidir;
+ * tek bir hata tum istegi geri alir, yari kalmis kaynak birakmaz.
+ *
+ * Kampanya HER ZAMAN PAUSED olarak olusturulur; bu fonksiyon ENABLED durumunu
+ * hicbir kosulda set etmez. createCustomerClient veya hesap olusturma cagrisi
+ * yapmaz; mutate yalnizca kampanya/butce/kriter/reklam kaynaklari icindir.
+ *
+ * @param array{
+ *     kampanya_adi: string,
+ *     butce_micros: int,
+ *     konum_kaynagi: string,
+ *     basliklar: array<int, string>,
+ *     aciklamalar: array<int, string>,
+ *     anahtar_kelimeler: array<int, string>,
+ *     web_sitesi: string
+ * } $plan
+ *
+ * @return array{kampanya_kaynagi: string, kampanya_id: string}
+ */
+function google_ads_kampanya_olustur(
+    string $refresh_token,
+    string $customer_id,
+    array $plan
+): array {
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Google Ads customer ID geçersiz.', 'api');
+    }
+
+    foreach (['kampanya_adi', 'konum_kaynagi', 'web_sitesi'] as $metin_alan) {
+        if (
+            !isset($plan[$metin_alan])
+            || trim((string) $plan[$metin_alan]) === ''
+        ) {
+            throw new GoogleAdsKesifHatasi(
+                'Kampanya oluşturma planı eksik alan içeriyor: ' . $metin_alan,
+                'girdi'
+            );
+        }
+    }
+
+    if (
+        !isset($plan['butce_micros'])
+        || !is_int($plan['butce_micros'])
+        || $plan['butce_micros'] <= 0
+    ) {
+        throw new GoogleAdsKesifHatasi(
+            'Günlük bütçe micros değeri geçersiz.',
+            'girdi'
+        );
+    }
+
+    foreach (['basliklar', 'aciklamalar', 'anahtar_kelimeler'] as $liste_alan) {
+        if (
+            !isset($plan[$liste_alan])
+            || !is_array($plan[$liste_alan])
+            || $plan[$liste_alan] === []
+        ) {
+            throw new GoogleAdsKesifHatasi(
+                'Kampanya oluşturma planı eksik alan içeriyor: ' . $liste_alan,
+                'girdi'
+            );
+        }
+    }
+
+    $client = google_ads_client_olustur($refresh_token);
+    $on_ek = 'customers/' . $customer_id;
+
+    try {
+        $islemler = [];
+
+        $butce_islemi = new MutateOperation();
+        $butce_islemi->setCampaignBudgetOperation((new CampaignBudgetOperation())->setCreate(
+            (new CampaignBudget())
+                ->setAmountMicros($plan['butce_micros'])
+                ->setDeliveryMethod(BudgetDeliveryMethod::STANDARD)
+                ->setExplicitlyShared(false)
+        ));
+        $islemler[] = $butce_islemi;
+
+        $kampanya_islemi = new MutateOperation();
+        $kampanya_islemi->setCampaignOperation((new CampaignOperation())->setCreate(
+            (new Campaign())
+                ->setName($plan['kampanya_adi'])
+                ->setAdvertisingChannelType(AdvertisingChannelType::SEARCH)
+                ->setStatus(CampaignStatus::PAUSED)
+                ->setCampaignBudget($on_ek . '/campaignBudgets/-1')
+                ->setMaximizeClicks(new MaximizeClicks())
+                ->setNetworkSettings(
+                    (new NetworkSettings())
+                        ->setTargetGoogleSearch(true)
+                        ->setTargetSearchNetwork(false)
+                        ->setTargetContentNetwork(false)
+                        ->setTargetPartnerSearchNetwork(false)
+                )
+        ));
+        $islemler[] = $kampanya_islemi;
+
+
+        $konum_islemi = new MutateOperation();
+        $konum_islemi->setCampaignCriterionOperation((new CampaignCriterionOperation())->setCreate(
+            (new CampaignCriterion())
+                ->setCampaign($on_ek . '/campaigns/-2')
+                ->setLocation(
+                    (new LocationInfo())
+                        ->setGeoTargetConstant($plan['konum_kaynagi'])
+                )
+        ));
+        $islemler[] = $konum_islemi;
+
+        $dil_islemi = new MutateOperation();
+        $dil_islemi->setCampaignCriterionOperation((new CampaignCriterionOperation())->setCreate(
+            (new CampaignCriterion())
+                ->setCampaign($on_ek . '/campaigns/-2')
+                ->setLanguage(
+                    (new LanguageInfo())
+                        ->setLanguageConstant('languageConstants/1017')
+                )
+        ));
+        $islemler[] = $dil_islemi;
+
+        $reklam_grubu_islemi = new MutateOperation();
+        $reklam_grubu_islemi->setAdGroupOperation((new AdGroupOperation())->setCreate(
+            (new AdGroup())
+                ->setName($plan['kampanya_adi'] . ' - Reklam Grubu 1')
+                ->setCampaign($on_ek . '/campaigns/-2')
+                ->setStatus(AdGroupStatus::ENABLED)
+                ->setType(AdGroupType::SEARCH_STANDARD)
+        ));
+        $islemler[] = $reklam_grubu_islemi;
+
+        foreach ($plan['anahtar_kelimeler'] as $anahtar_kelime) {
+            $kelime_islemi = new MutateOperation();
+            $kelime_islemi->setAdGroupCriterionOperation((new AdGroupCriterionOperation())->setCreate(
+                (new AdGroupCriterion())
+                    ->setAdGroup($on_ek . '/adGroups/-3')
+                    ->setStatus(AdGroupCriterionStatus::ENABLED)
+                    ->setKeyword(
+                        (new KeywordInfo())
+                            ->setText((string) $anahtar_kelime)
+                            ->setMatchType(KeywordMatchType::PHRASE)
+                    )
+            ));
+            $islemler[] = $kelime_islemi;
+        }
+
+        $basliklar = [];
+        foreach ($plan['basliklar'] as $baslik) {
+            $basliklar[] = (new AdTextAsset())->setText((string) $baslik);
+        }
+
+        $aciklamalar = [];
+        foreach ($plan['aciklamalar'] as $aciklama) {
+            $aciklamalar[] = (new AdTextAsset())->setText((string) $aciklama);
+        }
+
+        $reklam_islemi = new MutateOperation();
+        $reklam_islemi->setAdGroupAdOperation((new AdGroupAdOperation())->setCreate(
+            (new AdGroupAd())
+                ->setAdGroup($on_ek . '/adGroups/-3')
+                ->setAd(
+                    (new Ad())
+                        ->setResponsiveSearchAd(
+                            (new ResponsiveSearchAdInfo())
+                                ->setHeadlines($basliklar)
+                                ->setDescriptions($aciklamalar)
+                        )
+                        ->setFinalUrls([$plan['web_sitesi']])
+                )
+                ->setStatus(AdGroupAdStatus::ENABLED)
+        ));
+        $islemler[] = $reklam_islemi;
+
+        $istek = MutateGoogleAdsRequest::build($customer_id, $islemler);
+        $istek->setPartialFailure(false);
+
+        $yanit = $client->getGoogleAdsServiceClient()->mutate($istek);
+        $sonuclar = $yanit->getResults();
+        $kampanya_kaynagi = '';
+
+        if (
+            count($sonuclar) > 1
+            && $sonuclar[1]->getCampaignResult() !== null
+        ) {
+            $kampanya_kaynagi = (string) $sonuclar[1]->getCampaignResult()
+                ->getResourceName();
+        }
+
+        if (
+            $kampanya_kaynagi === ''
+            || preg_match('/^customers\/[0-9]+\/campaigns\/[0-9]+$/', $kampanya_kaynagi) !== 1
+        ) {
+            throw new RuntimeException('Mutate yanıtında kampanya kaynak adı doğrulanamadı.');
+        }
+
+        $kampanya_id = google_ads_kampanya_id_al($kampanya_kaynagi);
+
+        if ($kampanya_id === null) {
+            throw new RuntimeException('Kampanya ID çözümlenemedi.');
+        }
+
+        return [
+            'kampanya_kaynagi' => $kampanya_kaynagi,
+            'kampanya_id' => $kampanya_id,
+        ];
+    } catch (GoogleAdsException $hata) {
+        google_ads_hata_kaydi_yaz('GoogleAdsService::mutate kampanya-olustur', $hata);
+
+        $birincil_mesaj = '';
+        $failure = $hata->getGoogleAdsFailure();
+
+        if ($failure !== null && count($failure->getErrors()) > 0) {
+            $birincil_mesaj = (string) $failure->getErrors()[0]->getMessage();
+        }
+
+        $temiz_mesaj = trim(google_ads_hata_mesajini_sanitize_et($birincil_mesaj));
+
+        throw new GoogleAdsKesifHatasi(
+            $temiz_mesaj === ''
+                ? 'Google Ads kampanya oluşturma çağrısı başarısız.'
+                : $temiz_mesaj,
+            'api',
+            $hata
+        );
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (ApiException $hata) {
+        google_ads_hata_kaydi_yaz('GoogleAdsService::mutate kampanya-olustur', $hata);
+
+        $temiz_mesaj = trim(google_ads_hata_mesajini_sanitize_et((string) $hata->getMessage()));
+
+        throw new GoogleAdsKesifHatasi(
+            $temiz_mesaj === ''
+                ? 'Google Ads kampanya oluşturma çağrısı başarısız.'
+                : $temiz_mesaj,
+            'api',
+            $hata
+        );
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('GoogleAdsService::mutate kampanya-olustur', $hata);
+
+        throw new GoogleAdsKesifHatasi(
+            'Google Ads kampanya oluşturma çağrısı başarısız.',
+            'api',
             $hata
         );
     }

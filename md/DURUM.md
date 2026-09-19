@@ -944,3 +944,157 @@ Bilerek iskelet bırakılanlar (karar (b)) ve gerçek mantık/plan durumu:
   kalmış olabilir) ve `php/cron/senkron-calistir.php` iskelet olarak mevcut
   olmalıdır. Production silme/yükleme yetkisi bu kanalda bulunmadığından canlı
   teyit yapılamadı.
+---
+
+## PROMPT-20 — Kampanya oluşturma sihirbazı (ilk gerçek mutate akışı) (2026-09-19)
+
+Bu prompt, projenin ilk gerçek mutate (oluşturma) akışıdır; kapsam yalnızca Search
+kampanyasıdır ve kampanya **her zaman PAUSED** oluşturulur. Bu oturumda hiçbir gerçek
+Google Ads API çağrısı (mutate veya salt-okunur) yapılmadı; tüm doğrulama sentetik/
+birim test düzeyinde tamamlandı. Canlı test Kort’a bırakıldı (aşağıda).
+
+### Uygulanan katmanlar (ARCHITECTURE §5)
+
+- **`C:\server\htdocs\ads-oauth\tema\panel\kampanya-sihirbazi.php`** (PROMPT-18’de bilerek
+  iskelet işaretlenen dosya gerçek işlevine kavuştu; 89 satır): 7 alanlı form
+  (web sitesi, kampanya/iş adı, başlıklar, açıklamalar, anahtar kelimeler, günlük bütçe TL,
+  hedef konum); fetch ile `api/index.php?islem=kampanya-olustur` POST eder; başarı mesajı
+  PAUSED + ayrı onay adımı bilgisini içerir. Görev sırası ve dağıtım bilgisi
+  (bidding/match type/network) kullanıcıya gösterilmez (§1 gereği).
+- **`C:\server\htdocs\ads-oauth\index.php:58-61`**: `?islem=kampanya-sihirbazi` rotası
+  oturum kontrolünden sonra sihirbaz görünümüne yönlenir;
+  `tema/panel/anasayfa.php:74` panelde “Kampanya sihirbazı ile kampanya oluştur” linki
+  eklendi.
+- **`C:\server\htdocs\ads-oauth\api\kampanya-olustur.php`**: PROMPT-18 deseniyle
+  `ADS_OAUTH_API_INDEX` koruması (`:11-14`) + `api_kampanya_olustur()` köprüsü (`:21-24`)
+  → `kampanya_olustur($_POST)`. `api\index.php:21` require, `:73-75` dispatch.
+- **`C:\server\htdocs\ads-oauth\php\servis\kampanya-servisi.php`**:
+  - `kampanya_metnini_listeye_ayir()` (`:289`): satır/virgül ayrıştırıcı (saf).
+  - `kampanya_butcesini_microsa_cevir()` (`:316`): TL→micros çevrimi; **float matemiği
+    yerine string tabanlı** çevrim (19.99 → 19990000, float artifact yok); “500 TL”
+    eki, virgül/nokta ondalık kabul; geçersiz girdide `InvalidArgumentException`.
+  - `kampanya_girdilerini_dogrula()` (`:374`): §4 kuralları — URL normalize (https://
+    ekleme + FILTER_VALIDATE_URL), kampanya adı ≤255, başlık 3–15 adet ve ≤30 karakter,
+    açıklama 2–4 adet ve ≤90 karakter, anahtar kelime 1–20 adet ve ≤80 karakter,
+    bütçe pozitif, konum 1–100 karakter.
+  - `kampanya_olustur()` (`:513`): akış sırası — oturum → girdi doğrulama (saf) →
+    `google_kampanya_baglantisini_al()` → token çözme → **mutate öncesi taze manager
+    kontrolü** (`google_ads_musteri_bilgilerini_al`, salt-okunur; `:570` manager ise
+    mutate hiç denenmeden `return 0`) → konum çözümleme (salt-okunur) → tek atomik
+    mutate → yerel `kampanyalar` kaydı (non-fatal; hata halinde yalnızca
+    `yerel_kayit=yazilamadi` işaretlenir, Google tarafındaki başarı etkilenmez).
+    Response `Websistem {return, mesaj}` formatı; başarı mesajı PAUSED + ayrı onay
+    adımı bilgisini içerir.
+- **`C:\server\htdocs\ads-oauth\php\baglayici\google-ads-baglayici.php`**:
+  - `google_ads_konum_onerilerini_al()` (`:800`): salt-okunur
+    `GeoTargetConstantService.suggestGeoTargetConstants` (`tr` locale, `TR` ülke).
+    Yalnızca **tam isim eşleşmesi** kabul edilir; eşleşme yoksa önerilerle hata,
+    en yakın eşleşme sessizce seçilmez (§4).
+  - `google_ads_kampanya_id_al()` (`:911`): kaynak adından sayısal ID.
+  - `google_ads_kampanya_olustur()` (`:953`): tek `GoogleAdsService::mutate` istegi,
+    geçici kaynak adlarıyla bağlantılı 7 mutate adımı (§2.1 sırası): CampaignBudget
+    (STANDARD, explicitly_shared=false) → Campaign (`advertising_channel_type=SEARCH`,
+    **`status=PAUSED`** (`:1018`), Maximize Clicks, yalnızca Google Search ağı açık) →
+    CampaignCriterion konum → CampaignCriterion dil (`languageConstants/1017`) →
+    AdGroup (SEARCH_STANDARD, ENABLED) → AdGroupCriterion anahtar kelimeler
+    (PHRASE match) → AdGroupAd Responsive Search Ad (başlıklar/açıklamalar/final_urls).
+    `partial_failure=false` (`:1107`) → atomik; hata durumunda Google kendi tarafında
+    tam rollback yapar. GoogleAdsException birincil hata mesajı mevcut
+    `google_ads_hata_mesajini_sanitize_et` ile temizlenip kullanıcıya iletilir
+    (bütçe minimumu gibi gerçek API hataları kullanıcıya görünür olur), tüm detay
+    mevcut güvenli log pipeline’ına yazılır.
+
+### Güvenlik doğrulamaları (koddan)
+
+- Kampanya status: yalnızca `CampaignStatus::PAUSED` set edilir (`:1018`);
+  `CampaignStatus::ENABLED` adapter’da hiçbir yerde kullanılmaz (ENABLED yalnızca
+  ad group `:1059`, ad group criterion `:1069`, ad group ad `:1102` düzeyindedir —
+  bu kaynaklar kampanya durumunu etkilemez).
+- `createCustomerClient` kullanılmadı (yalnızca doküman yorumunda geçiyor).
+- Bu promptta gerçek API çağrısı yapılmadı; manager kontrolü/mutate çağrısı yalnızca
+  kod yolunda doğrulandı.
+
+
+### Doğrulama (bu oturumda gerçek API çağrısı yok)
+
+- Birim testi: `C:\server\htdocs\ads-oauth\tests\butce-micros-test.php`
+  (yeni dosya) → `php tests/butce-micros-test.php` sonucu:
+  `PROMPT-20 butce micros testleri: PASS (16 gecerli, 16 gecersiz vaka)`.
+  Kapsam: `500`/`500.00`/`500 TL`/` 500 tl ` → 500000000; `12,50`/`12.50`/`12.5`/
+  float 12.50 → 12500000; `19,99`/float 19.99 → 19990000 (float artifact yok);
+  `0,5` → 500000; `1000000` → 1000000000000; boş/metin/`-5`/`0`/`1.234`
+  (binlik ayraç)/`12,345`/`1e3` gibi girdiler `InvalidArgumentException` fırlatır.
+- Sentetik girdi doğrulama testleri (API/DB çağrısız): geçerli örnek formda
+  `https://ornek.com` normalize edildi, başlık 3/açıklama 2/anahtar kelime 2
+  ayrıştırıldı; 8 hata senaryosu (2 başlık, 31 karakter başlık, 5 açıklama,
+  91 karakter açıklama, 21 anahtar kelime, `abc` bütçe, geçersiz URL, 256 karakter
+  ad) beklenen mesajlarla reddedildi → `PASS`.
+- Sentetik köprü testleri: `api/kampanya-olustur.php` korumasız include → exit
+  (sonraki satır çalışmadı); korumalı include → `api_kampanya_olustur`/`kampanya_olustur`
+  tanımlı ve oturumsuz çağrı girdi işlemeden önce `return 0` döndü → `PASS`.
+- Sentetik görünüm testleri: sihirbaz 7 alan + fetch URL + PAUSED mesajı içeriyor;
+  panelde sihirbaz linki var → `PASS`.
+- `php -l`: değişen/yeni tüm PHP dosyaları geçti (`api/index.php`,
+  `api/kampanya-olustur.php`, `index.php`,
+  `php/baglayici/google-ads-baglayici.php`, `php/servis/kampanya-servisi.php`,
+  `tema/panel/anasayfa.php`, `tema/panel/kampanya-sihirbazi.php`,
+  `tests/butce-micros-test.php`). `git diff --check` temiz.
+
+## PROMPT-20 TODO
+
+- [x] Sihirbaz formu (7 alan) tema/panel/kampanya-sihirbazi.php'ye eklendi
+- [x] api/kampanya-olustur.php gerçek işlevine kavuştu
+- [x] kampanya-servisi.php: kampanya_olustur() + manager tekrar-doğrulama eklendi
+- [x] google-ads-baglayici.php: budget/campaign/criterion/ad-group/keyword/ad mutate
+      fonksiyonları eklendi
+- [x] GeoTargetConstant konum çözümleme eklendi (salt-okunur)
+- [x] TL→micros çevrimi için birim testi yazıldı ve geçti (16 geçerli, 16 geçersiz vaka)
+- [x] Kampanyanın her zaman PAUSED oluşturulduğu koddan doğrulandı (adapter:1018;
+      CampaignStatus::ENABLED adapter’da hiç kullanılmıyor)
+- [x] Manager hesaba mutate denenmediği doğrulandı (servis:570 mutate öncesi taze
+      salt-okunur kontrol; manager ise mutate yok; bu oturumda gerçek çağrı da yok)
+- [x] Girdi doğrulama kuralları (başlık/açıklama uzunluk, min/max sayılar) uygulandı
+      ve sentetik testlerle geçti
+- [x] php -l tüm dosyalarda geçti
+- [x] Deploy listesi verildi
+- [x] Kort'a canlı düşük bütçeli test talimatı DURUM.md'de not edildi
+- [x] DURUM.md güncellendi
+
+### PROMPT-20 deploy listesi
+
+Production’a birlikte deploy edilmeli:
+
+1. `C:\server\htdocs\ads-oauth\php\baglayici\google-ads-baglayici.php`
+2. `C:\server\htdocs\ads-oauth\php\servis\kampanya-servisi.php`
+3. `C:\server\htdocs\ads-oauth\api\kampanya-olustur.php`
+4. `C:\server\htdocs\ads-oauth\api\index.php`
+5. `C:\server\htdocs\ads-oauth\index.php`
+6. `C:\server\htdocs\ads-oauth\tema\panel\anasayfa.php`
+7. `C:\server\htdocs\ads-oauth\tema\panel\kampanya-sihirbazi.php`
+
+`tests/butce-micros-test.php` repo içi test dosyasıdır; production’da bulunması
+gerekmez. PROMPT-17/18/19 dosyaları production’da henüz yoksa PROMPT-20 listesiyle
+birlikte yüklenebilir. Not: `md/PROMPT-20-kampanya-olustur.md` kullanıcı tarafından
+eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştirilmedi.
+
+### PROMPT-20 canlı test talimatı (Kort için; bu promptun son adımı)
+
+1. Önce dağıtım/dağıtım-sonrası sanity: yetkili oturumla
+   `https://n0n1.tr/ads-oauth/index.php` → panelde “Kampanya sihirbazı…” linki
+   görünmeli; oturumsuz `api/index.php?islem=kampanya-olustur` POST için
+   `{"return":0,"mesaj":"Kampanya oluşturmak için giriş yapmalısınız."}` dönmeli.
+2. Sihirbazda **küçük, düşük bütçeli** bir test kampanyası doldur (örn. günlük
+   bütçe `10` TL, 3 kısa başlık, 2 açıklama, 1 anahtar kelime, konum `Ankara`).
+   Bu ilk gerçek mutate denemesidir; bütçe küçük tutulmalıdır.
+3. Başarılı response’ta `kampanya_id` ve PAUSED mesajı beklenir; ardından Google Ads
+   arayüzünden (önce manager MCC görünümü, sonra müşteri hesap) kampanyanın
+   **PAUSED** duraklatılmış olarak listede göründüğü, bütçenin 10 TL × 1.000.000 =
+   10.000.000 micros olduğu, reklam grubu/anahtar kelimeler/reklamın oluştuğu
+   görsel olarak doğrulanmalıdır. Kampanya reklam gözden geçirilecekse yine PAUSED
+   kalır; **ENABLED yapılmamalı** (yayına al endpoint’i bu promptta yazılmadı;
+   bilinçli olarak ayrı prompt konusudur).
+4. Herhangi bir Google API hatası alınırsa (örn. minimum bütçe), response’daki
+   `google_ads_hata` alanındaki mesajın içeriği DURUM.md’ye eklenmeli; tahminle
+   minimum bütçe kuralı yazılmamalıdır.
+5. Test kampanyası tamamlandıktan sonra ister Google Ads arayüzünden REMOVED
+   yapılabilir (yerel DB kaydı silinmez; yerel kayıt bilgilendirme amaçlıdır).
