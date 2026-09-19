@@ -20,7 +20,7 @@ require __DIR__ . '/../layout/header.php';
     <p>
         <label for="kampanya_adi">Kampanya / iş adı</label><br>
         <input type="text" id="kampanya_adi" name="kampanya_adi" required maxlength="255"
-        value="n0n1-ads-kampanya-test"/>
+        value="n0n1-ads-kampanya-test-1"/>
     </p>
     <p>
         <label for="basliklar">Reklam başlıkları (en az 3, en fazla 15; her biri en fazla 30 karakter)</label><br>

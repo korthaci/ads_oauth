@@ -1196,7 +1196,10 @@ function google_ads_kampanya_olustur(
         $istek->setPartialFailure(false);
 
         $yanit = $client->getGoogleAdsServiceClient()->mutate($istek);
-        $sonuclar = $yanit->getResults();
+        // Heterojen mutate isteklerinin yanitinda her bir operation sonucu
+        // MutateOperationResponse olarak doner; getResults() bu sinifta yoktur
+        // (PROMPT-20.5: vendor'dan dogrulandi).
+        $sonuclar = $yanit->getMutateOperationResponses();
         $kampanya_kaynagi = '';
 
         if (

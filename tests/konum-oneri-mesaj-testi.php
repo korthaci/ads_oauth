@@ -400,6 +400,8 @@ foreach ([
     "use Google\\Ads\\GoogleAds\\V25\\Enums\\EuPoliticalAdvertisingStatusEnum\\EuPoliticalAdvertisingStatus;" => 1,
     "EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING" => 1,
     "setContainsEuPoliticalAdvertising(" => 1,
+    "\$sonuclar = \$yanit->getMutateOperationResponses();" => 1,
+    "->getResults()" => 0,
 ] as $desen => $beklenen_adet) {
     $adet = substr_count($adapter_kod, $desen);
 
@@ -428,6 +430,111 @@ if (!class_exists($eu_reklam_enum)) {
 
 if (!defined($eu_reklam_enum . '::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING')) {
     fwrite(STDERR, "HATA (SDK): DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING sabiti vendor'da yok.\n");
+    exit(1);
+}
+
+$vaka_sayisi++;
+
+// 11) GOREV-B (PROMPT-20.5): Mutate yaniti okuma dogrulamasi.
+//     MutateGoogleAdsResponse getResults() sunmaz; getMutateOperationResponses()
+//     kullanilir. Her yanit elemani MutateOperationResponse olup tipine gore
+//     getCampaignResult() vb. getter'lar sunar (vendor V25'ten dogrulandi).
+//     Sentetik yanitla operation sirasi -> index-1 = kampanya varsayimi da
+//     test edilir; hicbir API cagrisi yapilmaz.
+$mutate_yanit_sinifi = \Google\Ads\GoogleAds\V25\Services\MutateGoogleAdsResponse::class;
+$mutate_islem_yaniti_sinifi = \Google\Ads\GoogleAds\V25\Services\MutateOperationResponse::class;
+
+if (!class_exists($mutate_yanit_sinifi) || !class_exists($mutate_islem_yaniti_sinifi)) {
+    fwrite(STDERR, "HATA (SDK): MutateGoogleAdsResponse/MutateOperationResponse vendor'da yok.\n");
+    exit(1);
+}
+
+if (method_exists($mutate_yanit_sinifi, 'getResults')) {
+    fwrite(STDERR, "HATA (SDK): MutateGoogleAdsResponse beklenmedik getResults() sunuyor.\n");
+    exit(1);
+}
+
+foreach (
+    [
+        'getPartialFailureError',
+        'getMutateOperationResponses',
+        'setMutateOperationResponses',
+    ] as $metot) {
+    if (!method_exists($mutate_yanit_sinifi, $metot)) {
+        fwrite(STDERR, sprintf(
+            "HATA (SDK): %s sinifinda %s metodu yok.\n",
+            $mutate_yanit_sinifi,
+            $metot
+        ));
+        exit(1);
+    }
+}
+
+foreach (
+    [
+        'getCampaignBudgetResult',
+        'getCampaignResult',
+        'getCampaignCriterionResult',
+        'getAdGroupResult',
+        'getAdGroupCriterionResult',
+        'getAdGroupAdResult',
+    ] as $getter) {
+    if (!method_exists($mutate_islem_yaniti_sinifi, $getter)) {
+        fwrite(STDERR, sprintf(
+            "HATA (SDK): MutateOperationResponse sinifinda %s getter'i yok.\n",
+            $getter
+        ));
+        exit(1);
+    }
+}
+
+$sentetik_yanit = new $mutate_yanit_sinifi();
+$sentetik_yanit->setMutateOperationResponses([
+    (new $mutate_islem_yaniti_sinifi())->setCampaignBudgetResult(
+        (new \Google\Ads\GoogleAds\V25\Services\MutateCampaignBudgetResult())
+            ->setResourceName('customers/1234567890/campaignBudgets/111')
+    ),
+    (new $mutate_islem_yaniti_sinifi())->setCampaignResult(
+        (new \Google\Ads\GoogleAds\V25\Services\MutateCampaignResult())
+            ->setResourceName('customers/1234567890/campaigns/222')
+    ),
+    (new $mutate_islem_yaniti_sinifi())->setCampaignCriterionResult(
+        (new \Google\Ads\GoogleAds\V25\Services\MutateCampaignCriterionResult())
+            ->setResourceName('customers/1234567890/campaignCriteria/222~333')
+    ),
+    (new $mutate_islem_yaniti_sinifi())->setAdGroupResult(
+        (new \Google\Ads\GoogleAds\V25\Services\MutateAdGroupResult())
+            ->setResourceName('customers/1234567890/adGroups/444')
+    ),
+    (new $mutate_islem_yaniti_sinifi())->setAdGroupCriterionResult(
+        (new \Google\Ads\GoogleAds\V25\Services\MutateAdGroupCriterionResult())
+            ->setResourceName('customers/1234567890/adGroupCriteria/444~555')
+    ),
+    (new $mutate_islem_yaniti_sinifi())->setAdGroupAdResult(
+        (new \Google\Ads\GoogleAds\V25\Services\MutateAdGroupAdResult())
+            ->setResourceName('customers/1234567890/adGroupAds/444~666')
+    ),
+]);
+
+// Adapter'daki okuma mantiginin aynisi: operation sirasi (butce -> kampanya ->
+// kampanya kriteri -> reklam grubu -> kelimeler -> reklam) yant dizisini de
+// ayni sirayla dondurdugu icin index-1 kampanya sonucunu tasir.
+$sentetik_sonuclar = $sentetik_yanit->getMutateOperationResponses();
+$sentetik_kaynak = '';
+
+if (
+    count($sentetik_sonuclar) === 6
+    && $sentetik_sonuclar[1]->getCampaignResult() !== null
+) {
+    $sentetik_kaynak = (string) $sentetik_sonuclar[1]->getCampaignResult()
+        ->getResourceName();
+}
+
+if (
+    $sentetik_kaynak !== 'customers/1234567890/campaigns/222'
+    || preg_match('/^customers\/[0-9]+\/campaigns\/[0-9]+$/', $sentetik_kaynak) !== 1
+) {
+    fwrite(STDERR, "HATA (sentetik mutate yanit): index-1 kampanya kaynagi beklenen degil.\n");
     exit(1);
 }
 

@@ -1200,3 +1200,83 @@ eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştiri
   (Google API'nin başka yeni zorunlu alanları da olabilir), gerçek hata mesajından
   tahmin edilmeden teşhis edilip AYRI bir düzeltme promptuna konu olacaktır; bu
   promptun kapsamı yalnızca bilinen bu tek alandır.
+
+## PROMPT-20.5 — Mutate yanıt okuma düzeltmesi: `getResults()` → `getMutateOperationResponses()` (2026-09-19)
+
+### Görev A — Yarım kalmış kampanya kontrolü (salt-okunur, zorunlu)
+
+- PROMPT-20.4 canlı testinde mutate isteği Google'a ulaştı ancak yanıt işlenirken
+  `Call to undefined method MutateGoogleAdsResponse::getResults()` hatası fırladı;
+  yani gerçek hesapta (`4150407743`) bir kampanya oluşmuş olabilir ve sistem bunu
+  doğrulayıp kullanıcıya göstermeden çökmüş olabilir.
+- Bu oturumda salt-okunur kontrol (Görev A) denendi: geçici CLI scripti
+  (PROMPT-16 `google_ads_kampanyalari_listele()` + `GoogleAdsService.search`
+  deseni; yalnızca `SELECT campaign.id, campaign.name, campaign.status, ...`
+  salt-okunur sorgusu, mutate yok) ile `baglanmis_hesaplar`'daki aktif Google
+  kaydı okundu: **no=2, sahip_no=6, harici_kimlik=9530538405 (Manager),
+  aktif=1**. Sihirbazın mutate hedefi ise alt hesap **4150407743**.
+- Gerçek API sorgusu bu ortamdan yine güvenli `kategori=oauth` hatası döndürdü
+  (refresh token bu CLI ortamından kullanılamadı; token/çıktı loglanmadı —
+  önceki oturumlardaki salt-okunur denemelerle aynı güvenli davranış). Sonuç:
+  **yetim kampanya var mı/yok mu bu oturumdan doğrulanamadı**; gerçek kampanya
+  adı/ID/oluşturulma zamanı verisi alınamadığı için buraya yazılamadı.
+- Geçici script kullanıldıktan sonra silindi; hiçbir token/credential ekrana
+  veya loga yazılmadı.
+- **KORT'A GÖRSEL TEYİT (zorunlu):** ads.google.com arayüzünden `4150407743`
+  hesabında beklenmedik bir "Türkiye"/test kampanyası (muhtemel ad:
+  `n0n1-ads-kampanya-test` / `n0n1-ads-kampanya-test-1`) olup olmadığı kontrol
+  edilmelidir. Bulunursa: `PAUSED` olduğu için harcama yapmaz (zararsız), ancak
+  varlığı bu kayda eklenmeli; istenirse kampanya arayüzden silinebilir.
+
+### Görev B — Yanıt okuma düzeltmesi (vendor'dan doğrulanmış)
+
+- `google_ads_kampanya_olustur()` içindeki `$sonuclar = $yanit->getResults();`
+  satırı, `getResults()` yöntemi `MutateGoogleAdsResponse` sınıfında bulunmadığı
+  için (`vendor/.../V25/Services/MutateGoogleAdsResponse.php` içinde yalnızca
+  `getPartialFailureError()` ile repeated `mutate_operation_responses` alanının
+  `getMutateOperationResponses()`/`setMutateOperationResponses()` erişimcileri
+  var — satır 103) şu şekilde değiştirildi:
+  `$sonuclar = $yanit->getMutateOperationResponses();`. Bu, Google'ın resmi SDK
+  örneklerindeki heterojen `mutate_operations` yanıt okuma deseniyle aynıdır.
+- Vendor teyitleri (tahmin edilmedi): `MutateOperationResponse::getCampaignResult()`
+  (satır 1221, oneof; eşleşmeyen operation için null döner — mevcut
+  `count($sonuclar) > 1 && $sonuclar[1]->getCampaignResult() !== null` koruması
+  korunmalıydı ve korundu), ayrıca `getCampaignBudgetResult()`,
+  `getCampaignCriterionResult()`, `getAdGroupResult()`,
+  `getAdGroupCriterionResult()`, `getAdGroupAdResult()` ve
+  `MutateCampaignResult::getResourceName()` (satır 56) hepsi V25 vendor
+  kaynaklarında mevcut.
+- Index varsayımı teyit edildi: istekteki operation sırası [campaign_budget,
+  campaign, campaign_criterion(konum), ..., ad_group, keywords, ad]; mutate
+  yanıtı sonuç dizisini istek sırasıyla aynı sırada döndürdüğü için
+  `$sonuclar[1]` kampanya operation'ının sonucudur (sentetik testle de
+  doğrulandı, aşağıda).
+- Kapsam: yalnızca yanıt okuma (response parsing) düzeltmesi; mutate isteğinin
+  oluşturulma kısmına (operation'lar, alanlar, PAUSED durumu, EU political
+  advertising alanı) hiç dokunulmadı. Bu promptta gerçek mutate çağrısı yapılmadı.
+
+### Doğrulama (PROMPT-20.5)
+
+- `php -l`: `php/baglayici/google-ads-baglayici.php` ve
+  `tests/konum-oneri-mesaj-testi.php` PASS.
+- Sentetik test güncellendi: adapter kaynak taramasına
+  `$sonuclar = $yanit->getMutateOperationResponses();` (tam 1 kez) ve
+  `->getResults()` (tam 0 kez) desenleri eklendi; yeni 10. vaka: SDK'da
+  `getResults` yokluğu, `getMutateOperationResponses`/`setMutateOperationResponses`
+  varlığı, `MutateOperationResponse` getter'larının (getCampaignBudgetResult,
+  getCampaignResult, getCampaignCriterionResult, getAdGroupResult,
+  getAdGroupCriterionResult, getAdGroupAdResult) varlığı ve sentetik 6 elemanlı
+  `MutateGoogleAdsResponse` zinciriyle index-1 kampanya kaynağı doğrulaması
+  (`customers/.../campaigns/...` regex dahil). Test PASS (10 vaka); micros testi
+  PASS (16 gecerli, 16 gecersiz); `git diff --check` temiz.
+- Kapsam notu: bu promptta kod değişen dosyalar `php/baglayici/google-ads-baglayici.php`
+  (1 satır değişim + 3 satır yorum) ve `tests/konum-oneri-mesaj-testi.php`
+  (tarama desenleri + 10. vaka) ile `md/DURUM.md` (bu bölüm).
+  `tema/panel/kampanya-sihirbazi.php` çalışma kopyasındaki tek satırlık değişiklik
+  (varsayılan kampanya adı `n0n1-ads-kampanya-test` → `n0n1-ads-kampanya-test-1`)
+  bu promptun kapsamı dışındadır; bu promptta o dosyaya dokunulmadı.
+- **Bu promptun gerçek başarı kriteri (KORT CANLI TEST):** deploy sonrası sihirbaz
+  Türkiye ile tekrar denenmeli; bu kez hem mutate isteği hem yanıt okuma başarılı
+  olmalı, kullanıcıya gerçek kampanya ID'si ve `PAUSED` durumu net şekilde
+  gösterilmelidir. Kampanya `PAUSED` bırakılır, `ENABLED` yapılmaz. Bir sonraki
+  hata çıkarsa gerçek API yanıtından teşhis edilip AYRI promptta çözülür.
