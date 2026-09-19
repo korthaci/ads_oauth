@@ -1166,3 +1166,37 @@ eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştiri
   sihirbazı yeniden denenmeli; `RESOURCE_NOT_FOUND` alınmadan gerçek `PAUSED`
   kampanya oluşturulmalı (bu promptun gerçek başarı kriteri). Kampanya `PAUSED`
   kalmalı, `ENABLED` yapılmamalı.
+
+## PROMPT-20.4 — Zorunlu `contains_eu_political_advertising` alanı (2026-09-19)
+
+- "Türkiye" (tek eşleşmeli konum) ile gerçek mutate denemesi bu kez `mutateError:
+  RESOURCE_NOT_FOUND` almadan mutate'e ulaştı (PROMPT-20.3 Görev A düzeltmesi
+  doğru çalıştı); bu kez `campaign_operation.create.contains_eu_political_advertising`
+  alanında `FieldError.REQUIRED` ("The required field was not present.") alındı.
+- Kök neden: 3 Eylül 2025'ten itibaren Google Ads API ile oluşturulan her yeni
+  kampanya, AB Siyasi Reklam Şeffaflık Yönetmeliği (TTPA) gereği
+  `contains_eu_political_advertising` alanını (`EuPoliticalAdvertisingStatus`
+  enum'u) açıkça beyan etmek zorunda; alan boş bırakılırsa `FieldError.REQUIRED`
+  dönüyor.
+- Düzeltme: `google_ads_kampanya_olustur()` içindeki Campaign create nesnesine
+  vendor'dan doğrulanan
+  `Google\Ads\GoogleAds\V25\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus`
+  enum'u ile `->setContainsEuPoliticalAdvertising(EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING)`
+  eklendi (enum sınıfı, sabit ve `Campaign::setContainsEuPoliticalAdvertising()`
+  vendor V25 kaynaklarından doğrulandı; tahmin edilmedi).
+- Sabit değer `DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING` olarak **hardcoded**dır
+  ve kullanıcıya arayüzde hiçbir şekilde sorulmaz (ARCHITECTURE.md §1.1 ilkesiyle
+  tutarlı): bu proje Türkiye pazarına yönelik, siyasi olmayan reklamlar hedefler ve
+  kapsamda siyasi reklam desteği yoktur. Bu değer sorulmadan değiştirilmemelidir.
+- Kapsam: yalnızca bu tek alan eklendi; mutate akışının başka hiçbir kısmına
+  dokunulmadı, kullanıcıya alanla ilgili seçenek/soru eklenmedi. Bu promptta gerçek
+  mutate çağrısı yapılmadı; `php -l`, sentetik konum/TTPA doğrulama testi ve mevcut
+  micros testleri PASS.
+- KORT CANLI TEST: deploy sonrası "Türkiye" ile kampanya sihirbazı tekrar denenmeli;
+  bu kez hiçbir `REQUIRED`/`RESOURCE_NOT_FOUND` hatası alınmadan gerçek, `PAUSED`
+  durumda bir kampanya oluşturulmalıdır (bu promptun gerçek başarı kriteri).
+  Kampanya `PAUSED` kalmalı, `ENABLED` yapılmamalı.
+- Not: Bu alan eklendikten sonra başka bir eksik zorunlu alan hatası çıkarsa
+  (Google API'nin başka yeni zorunlu alanları da olabilir), gerçek hata mesajından
+  tahmin edilmeden teşhis edilip AYRI bir düzeltme promptuna konu olacaktır; bu
+  promptun kapsamı yalnızca bilinen bu tek alandır.

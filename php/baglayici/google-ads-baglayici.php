@@ -29,6 +29,7 @@ use Google\Ads\GoogleAds\V25\Enums\AdvertisingChannelTypeEnum\AdvertisingChannel
 use Google\Ads\GoogleAds\V25\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V25\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V25\Enums\CustomerStatusEnum\CustomerStatus;
+use Google\Ads\GoogleAds\V25\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 use Google\Ads\GoogleAds\V25\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V25\Resources\AdGroup;
 use Google\Ads\GoogleAds\V25\Resources\AdGroupAd;
@@ -1096,6 +1097,13 @@ function google_ads_kampanya_olustur(
                 ->setName($plan['kampanya_adi'])
                 ->setAdvertisingChannelType(AdvertisingChannelType::SEARCH)
                 ->setStatus(CampaignStatus::PAUSED)
+                // AB Siyasi Reklam Şeffaflık Yönetmeliği (TTPA) gereği zorunlu:
+                // 03.09.2025'ten itibaren API ile oluşturulan tüm yeni kampanyalarda
+                // açık beyan şart. Bu proje siyasi reklam içermez; değer hardcoded
+                // tutulur, kullanıcıya sorulmaz.
+                ->setContainsEuPoliticalAdvertising(
+                    EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+                )
                 ->setCampaignBudget($on_ek . '/campaignBudgets/-1')
                 ->setTargetSpend(new TargetSpend())
                 ->setNetworkSettings(

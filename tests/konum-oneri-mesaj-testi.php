@@ -1,8 +1,8 @@
 <?php
 
 /**
- * PROMPT-20.3 sentetik testi: suggestGeoTargetConstants yanit isleme ve
- * belirsiz konum hata mesaji.
+ * PROMPT-20.3/20.4 sentetik testi: suggestGeoTargetConstants yanit isleme,
+ * belirsiz konum hata mesaji ve TTPA zorunlu alan dogrulamasi.
  *
  * Calistirma: php tests/konum-oneri-mesaj-testi.php
  * Google Ads API cagrisi yapmaz; sentetik SuggestGeoTargetConstantsResponse
@@ -397,6 +397,9 @@ foreach ([
     "'/campaignBudgets/-1'" => 2,
     "'/campaigns/-2'" => 4,
     "'/adGroups/-3'" => 3,
+    "use Google\\Ads\\GoogleAds\\V25\\Enums\\EuPoliticalAdvertisingStatusEnum\\EuPoliticalAdvertisingStatus;" => 1,
+    "EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING" => 1,
+    "setContainsEuPoliticalAdvertising(" => 1,
 ] as $desen => $beklenen_adet) {
     $adet = substr_count($adapter_kod, $desen);
 
@@ -413,7 +416,24 @@ foreach ([
 
 $vaka_sayisi++;
 
+// 10) GOREV-B (PROMPT-20.4): TTPA zorunlu kampanya alani dogrulamasi.
+//     Enum ve sabit vendor'da mevcut olmali (V25); adapter'da sabit deger
+//     tam olarak bir kez beyan edilmeli.
+$eu_reklam_enum = \Google\Ads\GoogleAds\V25\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus::class;
+
+if (!class_exists($eu_reklam_enum)) {
+    fwrite(STDERR, "HATA (SDK): EuPoliticalAdvertisingStatus enum sinifi vendor'da yok.\n");
+    exit(1);
+}
+
+if (!defined($eu_reklam_enum . '::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING')) {
+    fwrite(STDERR, "HATA (SDK): DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING sabiti vendor'da yok.\n");
+    exit(1);
+}
+
+$vaka_sayisi++;
+
 printf(
-    "PROMPT-20.3 konum oneri yanit testleri: PASS (%d vaka)\n",
+    "PROMPT-20.3/20.4 konum ve TTPA dogrulama testleri: PASS (%d vaka)\n",
     $vaka_sayisi
 );
