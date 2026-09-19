@@ -921,3 +921,26 @@ Bilerek iskelet bırakılanlar (karar (b)) ve gerçek mantık/plan durumu:
   listesiyle birlikte yüklenebilir.
 - Bu oturumda DB’ye yazılmadı, OAuth kayıtlarına/refresh tokenlara dokunulmadı ve
   hiçbir Google Ads mutate/API çağrısı yapılmadı.
+---
+
+## PROMPT-19 — `php/Cron/` / `php/cron/` çakışma temizliği (2026-09-18)
+
+- `git rm "php/Cron/senkron-calistir.php"` ile index’teki büyük harfli yol kaldırıldı
+  (staged: `D  php/Cron/senkron-calistir.php`). HEAD’de iki yol aynı blob’u
+  (`21169303192c3cf24ffc9c56a72a5708a3d18dda`) paylaştığı için içerik kaybı yok;
+  `php/cron/senkron-calistir.php` çalışma ağacında iskelet içeriğiyle korundu ve
+  `php -l` geçti. Senkron mantığı yazılmadı.
+- `md/ARCHITECTURE.md:200` §5 referansı `php/Cron/` → `php/cron/` olarak düzeltildi;
+  §4 (`:170`) zaten küçük harf `cron/` idi. `:129` “Cron:” yol referansı değil,
+  terim başlığıdır; değiştirilmedi.
+- Repo taramasında büyük harfli `Cron/` kalan referanslar bilinçli olarak
+  değiştirilmedi (“başka dosyaya dokunulmaz”): `md/00-iskelet-kurulum.md:75,90` ve
+  `md/01-isimlendirme-duzeltme.md:14` geçmiş prompt kayıtları; `md/DURUM.md:401`
+  kavramsal kullanım (“Cron/senkron mekanizması”), yol referansı değildir.
+- Beklenen commit içeriği: `D  php/Cron/senkron-calistir.php`,
+  `M  md/ARCHITECTURE.md`, `M  md/DURUM.md`.
+- Production kontrol (Kort): push/checkout sonrası Linux’ta `php/Cron/` klasörü
+  tamamen silinmeli (production’da eski büyük harfli klasör ayrı klasör olarak
+  kalmış olabilir) ve `php/cron/senkron-calistir.php` iskelet olarak mevcut
+  olmalıdır. Production silme/yükleme yetkisi bu kanalda bulunmadığından canlı
+  teyit yapılamadı.

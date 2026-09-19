@@ -197,7 +197,7 @@ ads_oauth/
 - **`php/Oauth/`** → Google/Meta OAuth akışının teknik detayları (authorization URL üretme, token değişimi).
 - **`php/Baglayici/`** → Google Ads API / Meta Marketing API çağrılarını sarmalayan adapter katmanı. SDK değişikliklerinin etkisi sadece burada kalmalı.
 - **`php/Servis/`** → İş mantığı. `Baglayici/` ve `Oauth/` katmanlarını kullanır, `api/` dosyalarına temiz veri döner.
-- **`php/Cron/`** → HTTP isteğinden bağımsız, crontab ile tetiklenen tek giriş dosyası.
+- **`php/cron/`** → HTTP isteğinden bağımsız, crontab ile tetiklenen tek giriş dosyası.
 - **`tema/`** → Sadece görünüm. İş mantığı içermez.
 
 ---
