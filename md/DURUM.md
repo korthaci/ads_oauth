@@ -1137,3 +1137,32 @@ eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştiri
 - Bu oturumdaki gerçek salt-okunur Ankara denemesi token/API çıktısı loglanmadan yapıldı;
   sonuç yine güvenli `kategori=oauth` oldu. Bu nedenle gerçek `resource_name` ve `name`
   sonucu henüz doğrulanamadı. Gerçek mutate çağrısı yapılmadı.
+
+## PROMPT-20.3 — Mutate temp resource adları ve konum belirsizlik mesajı (2026-09-19)
+
+- Gerçek mutate denemesinde `campaign_budget`/`campaign`/`ad_group` create'lerinde
+  `mutateError: RESOURCE_NOT_FOUND` (trigger `-1/-2/-3`) görüldü; kök neden, temp
+  kaynaklara referans verilip onları oluşturan `create` operation'larında
+  `resource_name` atanmamış olmasıydı.
+- Görev A: `google_ads_kampanya_olustur()` içinde CampaignBudget create'e
+  `->setResourceName($on_ek . '/campaignBudgets/-1')`, Campaign create'e
+  `->setResourceName($on_ek . '/campaigns/-2')`, AdGroup create'e
+  `->setResourceName($on_ek . '/adGroups/-3')` satırları eklendi. Referanslar
+  (`-1/-2/-3`), alanlar, `PAUSED` durumu ve operation sırası değiştirilmedi.
+- Görev B: vendor'dan doğrulanan `GeoTargetConstant::getTargetType()` ve
+  `getCanonicalName()` ile eşleşme kayıtlarına `target_type` ve `canonical_name`
+  alanları eklendi; `count($tam_eslesenler) > 1` hatası artık adayları ve en fazla 5
+  örnek canonical_name değerini listeliyor (örn. "Ankara (Province), Ankara (County). …
+  Örnek canonical_name değerleri: Ankara,Ankara,Turkey | Ankara,Kızılcahamam,Turkey.").
+  Tam eşleşme karar mantığı ve sessiz best-match yasağı değişmedi; yanıt işleme,
+  davranışı koruyan saf `google_ads_konum_yanitini_isle()` fonksiyonuna taşındı
+  (sentetik test edilebilirlik için).
+- Sentetik test `tests/konum-oneri-mesaj-testi.php` eklendi (gerçek SDK response
+  sınıflarıyla, API çağrısı olmadan): tek eşleşme, belirsiz çok eşleşme, canonical'sız
+  belirsizlik, 6 adayda ilk 5 sınırı, tam eşleşme yok, boş/geçersiz öneri vakaları
+  PASS; `php -l` ve mevcut butce micros testleri PASS. Bu promptta gerçek mutate
+  çağrısı yapılmadı.
+- KORT CANLI TEST: deploy sonrası "Türkiye" (tek eşleşmeli konum) ile kampanya
+  sihirbazı yeniden denenmeli; `RESOURCE_NOT_FOUND` alınmadan gerçek `PAUSED`
+  kampanya oluşturulmalı (bu promptun gerçek başarı kriteri). Kampanya `PAUSED`
+  kalmalı, `ENABLED` yapılmamalı.

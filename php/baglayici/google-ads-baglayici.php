@@ -50,6 +50,7 @@ use Google\Ads\GoogleAds\V25\Services\MutateGoogleAdsRequest;
 use Google\Ads\GoogleAds\V25\Services\MutateOperation;
 use Google\Ads\GoogleAds\V25\Services\SearchGoogleAdsRequest;
 use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest;
+use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsResponse;
 use Google\ApiCore\ApiException;
 
 /**
@@ -787,15 +788,159 @@ function google_ads_kampanyalari_listele(
 }
 
 /**
+ * Belirsiz konum eslesmelerinde adaylari hedef turu ve ornek canonical_name
+ * degerleriyle (en fazla 5) listeleyen, kullaniciya aciklanabilir hata mesaji
+ * uretir.
+ *
+ * @param array<int, array{
+ *     resource_name: string,
+ *     name: string,
+ *     target_type: string,
+ *     canonical_name: string
+ * }> $tam_eslesenler
+ */
+function google_ads_konum_belirsizlik_mesaji(array $tam_eslesenler): string
+{
+    $aday_ozetleri = [];
+    $kanonik_ornekler = [];
+
+    foreach (array_slice($tam_eslesenler, 0, 5) as $aday) {
+        $ad = trim((string) ($aday['name'] ?? ''));
+
+        if ($ad === '') {
+            continue;
+        }
+
+        $tur = trim((string) ($aday['target_type'] ?? ''));
+        $kanonik = trim((string) ($aday['canonical_name'] ?? ''));
+
+        $aday_ozetleri[] = $ad . ($tur === '' ? '' : ' (' . $tur . ')');
+
+        if ($kanonik !== '') {
+            $kanonik_ornekler[] = $kanonik;
+        }
+    }
+
+    $mesaj = 'Aynı adlı birden fazla Google Ads konumu bulundu: '
+        . implode(', ', $aday_ozetleri) . '.';
+
+    if ($kanonik_ornekler === []) {
+        return $mesaj . ' Lütfen konumu il/ilçe bilgisiyle daha belirgin yazın.';
+    }
+
+    return $mesaj
+        . " Lütfen 'canonical_name' değerlerinden birine göre daha belirgin yazın"
+        . ' (örn. tam il/ilçe adı). Örnek canonical_name değerleri: '
+        . implode(' | ', $kanonik_ornekler) . '.';
+}
+
+/**
+ * SuggestGeoTargetConstants yanitini tarayip buyuk/kucuk harf duyarsiz tam isim
+ * eslesmesini dondurur. Tam eslesme yoksa/tekil degilse, adaylari aciklayan
+ * GoogleAdsKesifHatasi firlatir; en yakin eslesme sessizce secilmez.
+ *
+ * Saf fonksiyondur: Google Ads API cagrisi yapmaz; sentetik response ile test
+ * edilebilir. Tam eslesme karar mantigi PROMPT-20.3 ile degismemistir; yalnizca
+ * kayitlara target_type/canonical_name eklendi ve belirsizlik mesaji zenginlesti.
+ *
+ * @return array{
+ *     resource_name: string,
+ *     name: string,
+ *     target_type: string,
+ *     canonical_name: string
+ * }
+ */
+function google_ads_konum_yanitini_isle(
+    SuggestGeoTargetConstantsResponse $yanit,
+    string $konum
+): array {
+    $oneriler = [];
+    $tam_eslesenler = [];
+    $arama_ad = mb_strtolower(trim($konum), 'UTF-8');
+    $tarama_limiti = 0;
+
+    foreach ($yanit->getGeoTargetConstantSuggestions() as $oneri) {
+        if (++$tarama_limiti > 50) {
+            break;
+        }
+
+        $sabit = $oneri->getGeoTargetConstant();
+
+        if ($sabit === null) {
+            continue;
+        }
+
+        $ad = trim((string) $sabit->getName());
+        $kaynak = trim((string) $sabit->getResourceName());
+
+        if (
+            $ad === ''
+            || $kaynak === ''
+            || preg_match('/^geoTargetConstants\/[0-9]+$/', $kaynak) !== 1
+        ) {
+            continue;
+        }
+
+        $kayit = [
+            'resource_name' => $kaynak,
+            'name' => $ad,
+            'target_type' => trim((string) $sabit->getTargetType()),
+            'canonical_name' => trim((string) $sabit->getCanonicalName()),
+        ];
+
+        $oneriler[] = $kayit;
+
+        if (mb_strtolower($ad, 'UTF-8') === $arama_ad) {
+            $tam_eslesenler[] = $kayit;
+        }
+    }
+
+    if (count($tam_eslesenler) === 1) {
+        return $tam_eslesenler[0];
+    }
+
+    if (count($tam_eslesenler) > 1) {
+        throw new GoogleAdsKesifHatasi(
+            google_ads_konum_belirsizlik_mesaji($tam_eslesenler),
+            'girdi'
+        );
+    }
+
+    if ($oneriler === []) {
+        throw new GoogleAdsKesifHatasi(
+            'Girilen konum bulunamadı; farklı yazmayı deneyin.',
+            'girdi'
+        );
+    }
+
+    $ornekler = implode(', ', array_column(
+        array_slice($oneriler, 0, 5),
+        'name'
+    ));
+
+    throw new GoogleAdsKesifHatasi(
+        'Girilen konum için tam eşleşme bulunamadı. Örnek öneriler: '
+        . $ornekler,
+        'girdi'
+    );
+}
+
+/**
  * Girilen serbest metin konum adini Google Ads geoTargetConstant kaynak adina
  * cevirir. Salt-okunur calisir: GeoTargetConstantService.suggestGeoTargetConstants
  * kullanir; mutate cagrisi yapmaz.
  *
  * Yalnizca tam (buyuk/kucuk harf duyarsiz) isim eslesmesi kabul edilir; en yakin
  * eslesme sessizce secilmez. Tam eslesme yoksa, bulunabilirse ornek onerilerle
- * birlikte hata firlatilir.
+ * birlikte hata firlatilir. Ayni adli birden fazla tam eslesme varsa, adaylarin
+ * target_type ve ornek canonical_name degerleri hata mesajinda listelenir.
  *
- * @return array{resource_name: string, name: string}
+ * @return array{
+ *     resource_name: string,
+ *     name: string,
+ *     target_type: string,
+ *     canonical_name: string
+ * }
  */
 function google_ads_konum_onerilerini_al(
     string $refresh_token,
@@ -820,74 +965,7 @@ function google_ads_konum_onerilerini_al(
         $yanit = $client->getGeoTargetConstantServiceClient()
             ->suggestGeoTargetConstants($istek);
 
-        $oneriler = [];
-        $tam_eslesenler = [];
-        $arama_ad = mb_strtolower($konum, 'UTF-8');
-        $tarama_limiti = 0;
-
-        foreach ($yanit->getGeoTargetConstantSuggestions() as $oneri) {
-            if (++$tarama_limiti > 50) {
-                break;
-            }
-
-            $sabit = $oneri->getGeoTargetConstant();
-
-            if ($sabit === null) {
-                continue;
-            }
-
-            $ad = trim((string) $sabit->getName());
-            $kaynak = trim((string) $sabit->getResourceName());
-
-            if (
-                $ad === ''
-                || $kaynak === ''
-                || preg_match('/^geoTargetConstants\/[0-9]+$/', $kaynak) !== 1
-            ) {
-                continue;
-            }
-
-            $kayit = [
-                'resource_name' => $kaynak,
-                'name' => $ad,
-            ];
-
-            $oneriler[] = $kayit;
-
-            if (mb_strtolower($ad, 'UTF-8') === $arama_ad) {
-                $tam_eslesenler[] = $kayit;
-            }
-        }
-
-        if (count($tam_eslesenler) === 1) {
-            return $tam_eslesenler[0];
-        }
-
-        if (count($tam_eslesenler) > 1) {
-            throw new GoogleAdsKesifHatasi(
-                'Aynı adlı birden fazla Google Ads konumu bulundu; kampanya için '
-                . 'konumu daha belirgin yazın.',
-                'girdi'
-            );
-        }
-
-        if ($oneriler === []) {
-            throw new GoogleAdsKesifHatasi(
-                'Girilen konum bulunamadı; farklı yazmayı deneyin.',
-                'girdi'
-            );
-        }
-
-        $ornekler = implode(', ', array_column(
-            array_slice($oneriler, 0, 5),
-            'name'
-        ));
-
-        throw new GoogleAdsKesifHatasi(
-            'Girilen konum için tam eşleşme bulunamadı. Örnek öneriler: '
-            . $ornekler,
-            'girdi'
-        );
+        return google_ads_konum_yanitini_isle($yanit, $konum);
     } catch (GoogleAdsKesifHatasi $hata) {
         throw $hata;
     } catch (Throwable $hata) {
@@ -1004,6 +1082,7 @@ function google_ads_kampanya_olustur(
         $butce_islemi = new MutateOperation();
         $butce_islemi->setCampaignBudgetOperation((new CampaignBudgetOperation())->setCreate(
             (new CampaignBudget())
+                ->setResourceName($on_ek . '/campaignBudgets/-1')
                 ->setAmountMicros($plan['butce_micros'])
                 ->setDeliveryMethod(BudgetDeliveryMethod::STANDARD)
                 ->setExplicitlyShared(false)
@@ -1013,6 +1092,7 @@ function google_ads_kampanya_olustur(
         $kampanya_islemi = new MutateOperation();
         $kampanya_islemi->setCampaignOperation((new CampaignOperation())->setCreate(
             (new Campaign())
+                ->setResourceName($on_ek . '/campaigns/-2')
                 ->setName($plan['kampanya_adi'])
                 ->setAdvertisingChannelType(AdvertisingChannelType::SEARCH)
                 ->setStatus(CampaignStatus::PAUSED)
@@ -1054,6 +1134,7 @@ function google_ads_kampanya_olustur(
         $reklam_grubu_islemi = new MutateOperation();
         $reklam_grubu_islemi->setAdGroupOperation((new AdGroupOperation())->setCreate(
             (new AdGroup())
+                ->setResourceName($on_ek . '/adGroups/-3')
                 ->setName($plan['kampanya_adi'] . ' - Reklam Grubu 1')
                 ->setCampaign($on_ek . '/campaigns/-2')
                 ->setStatus(AdGroupStatus::ENABLED)
