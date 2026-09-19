@@ -825,7 +825,7 @@ function google_ads_konum_onerilerini_al(
         $arama_ad = mb_strtolower($konum, 'UTF-8');
         $tarama_limiti = 0;
 
-        foreach ($yanit as $oneri) {
+        foreach ($yanit->getGeoTargetConstantSuggestions() as $oneri) {
             if (++$tarama_limiti > 50) {
                 break;
             }

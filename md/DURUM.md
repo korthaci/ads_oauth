@@ -1120,3 +1120,20 @@ eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştiri
 - Kort, deploy sonrası oturumlu ortamda önce Ankara için salt-okunur konum önerisini,
   ardından düşük bütçeli test kampanyası oluşturma akışını yeniden denemeli; kampanya
   `PAUSED` kalmalı ve `ENABLED` yapılmamalıdır.
+
+## PROMPT-20.2 — `suggestGeoTargetConstants` response getter düzeltmesi (2026-09-19)
+
+- `vendor/googleads/google-ads-php` v34.0.0 içindeki V25
+  `SuggestGeoTargetConstantsResponse` sınıfı açılarak gerçek getter doğrulandı:
+  `getGeoTargetConstantSuggestions()`; dönüş tipi `RepeatedField<GeoTargetConstantSuggestion>`.
+- `google_ads_konum_onerilerini_al()` içinde response nesnesi üzerinde doğrudan dönen
+  `foreach ($yanit as $oneri)` satırı, API sonuç listesini okumadığı için
+  `foreach ($yanit->getGeoTargetConstantSuggestions() as $oneri)` olarak düzeltildi.
+  Tam eşleşme, tarama limiti ve hata mesajı mantığı değiştirilmedi; gerçek mutate çağrısı
+  yapılmadı.
+- Kort, deploy sonrası oturumlu ortamda `Ankara` için salt-okunur çağrının artık gerçek
+  `resource_name` ve `name` döndürdüğünü doğrulamalı; ardından düşük bütçeli gerçek test
+  kampanyası akışını yeniden denemeli ve kampanyayı `PAUSED` bırakmalıdır.
+- Bu oturumdaki gerçek salt-okunur Ankara denemesi token/API çıktısı loglanmadan yapıldı;
+  sonuç yine güvenli `kategori=oauth` oldu. Bu nedenle gerçek `resource_name` ve `name`
+  sonucu henüz doğrulanamadı. Gerçek mutate çağrısı yapılmadı.
