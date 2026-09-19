@@ -1098,3 +1098,25 @@ eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştiri
    minimum bütçe kuralı yazılmamalıdır.
 5. Test kampanyası tamamlandıktan sonra ister Google Ads arayüzünden REMOVED
    yapılabilir (yerel DB kaydı silinmez; yerel kayıt bilgilendirme amaçlıdır).
+
+## PROMPT-20.1 — `LocationNames` namespace ve V25 import doğrulaması (2026-09-19)
+
+- `composer.lock` içinde `googleads/google-ads-php` sürümü `v34.0.0`; vendor API
+  namespace'i `V25` olarak doğrulandı.
+- Hatalı namespace `Google\Ads\GoogleAds\V25\Services\LocationNames` idi.
+  Doğrusu nested sınıf olarak
+  `Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest\LocationNames`.
+- Aynı adapter taramasında V25'te bulunmayan `Common\Ad`, `Common\NetworkSettings`
+  ve `Common\MaximizeClicks` importları da düzeltildi: `Resources\Ad`,
+  `Resources\Campaign\NetworkSettings` ve `Common\TargetSpend`. V25 Campaign modelinde
+  bu strateji `setTargetSpend(new TargetSpend())` ile temsil ediliyor; teklif tutarı
+  verilmediği için varsayılan Maximize Clicks davranışı korunuyor.
+- `php -l php/baglayici/google-ads-baglayici.php` başarılı; doğrulanan V25 sınıf/importları
+  için `class_exists`/`interface_exists` kontrolü başarılı.
+- Salt-okunur `google_ads_konum_onerilerini_al(..., 'Ankara')` çağrısı aktif şifreli
+  bağlantı üzerinden denendi; güvenli test çıktısı `kategori=oauth` oldu ve bu nedenle
+  gerçek `suggestGeoTargetConstants` sonucu alınamadı. Token veya ham API hatası loglanmadı.
+  Gerçek mutate çağrısı yapılmadı.
+- Kort, deploy sonrası oturumlu ortamda önce Ankara için salt-okunur konum önerisini,
+  ardından düşük bütçeli test kampanyası oluşturma akışını yeniden denemeli; kampanya
+  `PAUSED` kalmalı ve `ENABLED` yapılmamalıdır.

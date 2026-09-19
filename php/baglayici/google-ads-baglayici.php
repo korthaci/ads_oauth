@@ -15,14 +15,12 @@ use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsException;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsClient;
 use Google\Ads\GoogleAds\Lib\V25\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\V25\Common\Ad;
 use Google\Ads\GoogleAds\V25\Common\AdTextAsset;
 use Google\Ads\GoogleAds\V25\Common\KeywordInfo;
 use Google\Ads\GoogleAds\V25\Common\LanguageInfo;
 use Google\Ads\GoogleAds\V25\Common\LocationInfo;
-use Google\Ads\GoogleAds\V25\Common\MaximizeClicks;
-use Google\Ads\GoogleAds\V25\Common\NetworkSettings;
 use Google\Ads\GoogleAds\V25\Common\ResponsiveSearchAdInfo;
+use Google\Ads\GoogleAds\V25\Common\TargetSpend;
 use Google\Ads\GoogleAds\V25\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V25\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
 use Google\Ads\GoogleAds\V25\Enums\AdGroupStatusEnum\AdGroupStatus;
@@ -35,9 +33,11 @@ use Google\Ads\GoogleAds\V25\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V25\Resources\AdGroup;
 use Google\Ads\GoogleAds\V25\Resources\AdGroupAd;
 use Google\Ads\GoogleAds\V25\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V25\Resources\Ad;
 use Google\Ads\GoogleAds\V25\Resources\Campaign;
 use Google\Ads\GoogleAds\V25\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V25\Resources\CampaignCriterion;
+use Google\Ads\GoogleAds\V25\Resources\Campaign\NetworkSettings;
 use Google\Ads\GoogleAds\V25\Services\AdGroupAdOperation;
 use Google\Ads\GoogleAds\V25\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V25\Services\AdGroupOperation;
@@ -45,7 +45,7 @@ use Google\Ads\GoogleAds\V25\Services\CampaignBudgetOperation;
 use Google\Ads\GoogleAds\V25\Services\CampaignCriterionOperation;
 use Google\Ads\GoogleAds\V25\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V25\Services\ListAccessibleCustomersRequest;
-use Google\Ads\GoogleAds\V25\Services\LocationNames;
+use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest\LocationNames;
 use Google\Ads\GoogleAds\V25\Services\MutateGoogleAdsRequest;
 use Google\Ads\GoogleAds\V25\Services\MutateOperation;
 use Google\Ads\GoogleAds\V25\Services\SearchGoogleAdsRequest;
@@ -1017,7 +1017,7 @@ function google_ads_kampanya_olustur(
                 ->setAdvertisingChannelType(AdvertisingChannelType::SEARCH)
                 ->setStatus(CampaignStatus::PAUSED)
                 ->setCampaignBudget($on_ek . '/campaignBudgets/-1')
-                ->setMaximizeClicks(new MaximizeClicks())
+                ->setTargetSpend(new TargetSpend())
                 ->setNetworkSettings(
                     (new NetworkSettings())
                         ->setTargetGoogleSearch(true)
