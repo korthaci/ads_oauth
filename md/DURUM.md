@@ -5,7 +5,8 @@ Yeni bir sohbete başlarken önce bu sırayla oku:
 2. ARCHITECTURE.md — sabit mimari/kararlar
 3. md/GOOGLE-HESAP-KURULUM-REHBERI.md — Google Cloud/Ads hesap kurulum süreci (kod değil, referans)
 
-GitHub: https://github.com/korthaci/ads_oauth
+GitHub: https://github.com/korthaci/ads_oauth 
+(GitHub:Bu adresteki yenilemeler görülemiyordu. Çünkü github js ile yeniliyor. AI cevabı : Çözüldü — web_fetch ile GitHub'ın HTML sayfasını çekmek yerine, repoyu doğrudan klonlayabiliyorum. Bunu az önce test ettim ve çalıştı; artık senden git ls-files gibi çıktı istemeden kodu doğrudan görebilirim. Bundan sonra bu şekilde ilerleyeceğim.)
 
 > Bu dosya **canlıdır** — her ilerleme sonrası güncellenir. Yeni bir çalışma oturumuna
 > başlarken (context sıfırlansa dahi) önce bu dosya okunur, sonra ARCHITECTURE.md, sonra
