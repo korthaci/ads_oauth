@@ -1424,3 +1424,44 @@ konumlar, toplam bütçe, konum seçimi) yerel tabloya yazılmaz.
    göründüğü gibi kontrol edilmeli.
 4. Üç senaryoda da PAUSED korunur; ENABLED denemesi yapılmaz. Herhangi bir hata
    çıkarsa gerçek API yanıtından teşhis edilip AYRI promptta çözülür.
+
+---
+
+## PROMPT-21.1 — Yanlış Dil Sabiti Düzeltmesi (`1017` → `1037`) — TAMAMLANDI (kod tarafı)
+
+**Sorun:** PROMPT-20'den beri dil hedeflemesi sabit `languageConstants/1017` ile
+yapılıyordu ("Türkçe" varsayımıyla). Gerçek test kampanyası `24265218474`
+("Türkiye + Trabzon hariç") Google Ads arayüzünde **Çince (basitleştirilmiş)**
+dil hedefiyle çıktı.
+
+**Doğrulama (Görev A):**
+- Canlı GAQL salt-okunur sorgu (`SELECT ... FROM language_constant WHERE
+  language_constant.code = 'tr'`) bu oturumdan çalıştırılamadı: CLI'de refresh
+  token `invalid_grant` (web oturumu dışında kullanılamaz, `kategori=oauth`
+  kısıtı). Token/çıktı loglanmadı; geçici CLI scripti silindi.
+- İki bağımsız kanıt birbirini teyit ediyor:
+  1. Google Ads "Codes and formats" dil sabitleri tablosu (developers.google.com):
+     `zh_CN` = **1017** (Chinese, simplified), `tr` = **1037** (Turkish).
+  2. Canlı kampanya `24265218474` arayüzde Çince (basitleştirilmiş) görünmesi —
+     1017'nin gerçekten zh_CN olduğunu doğrudan kanıtlar.
+- **Sonuç:** eski yanlış ID `1017` = Çince (basitleştirilmiş); yeni doğru ID
+  `1037` = Türkçe. (Kort istersen web oturumuyla aynı GAQL sorgusunu
+  çalıştırıp `tr -> 1037`'yi bir kez daha teyit edebilir.)
+
+**Değişiklik (Görev B):**
+- `php/baglayici/google-ads-baglayici.php` satır ~1207:
+  `->setLanguageConstant('languageConstants/1017')` →
+  `->setLanguageConstant('languageConstants/1037')` + hangi sorgu/kaynakla
+  doğrulandığını anlatan yorum bloğu eklendi. `1017` kodda başka hiçbir yerde
+  kullanılmıyordu (grep ile doğrulandı; sabit/const tanımı da yok).
+- Başka hiçbir mutate akışı değiştirilmedi; dil sabiti hardcoded kaldı, arayüze
+  dil seçimi eklenmedi (ARCHITECTURE.md §1.1 ile tutarlı).
+- `php -l` temiz.
+
+**Kort için hatırlatmalar:**
+1. **Canlı doğrulama (gerçek başarı kriteri):** production'a deploy sonrası
+   sihirbazla **yeni** bir test kampanyası oluştur (PAUSED) ve Google Ads
+   arayüzünde **Diller** ayarının **Türkçe** olduğunu teyit et.
+2. **Eski yanlış-dilli test kampanyaları** (`24268992914`, `24276234886`,
+   `24265218474` vb.) otomatik düzeltilmedi; dilediğini arayüzden Türkçe'ye
+   çevir veya `REMOVED` yap (senin kararın).

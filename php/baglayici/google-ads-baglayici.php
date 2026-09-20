@@ -1195,7 +1195,16 @@ function google_ads_kampanya_olustur(
                 ->setCampaign($on_ek . '/campaigns/-2')
                 ->setLanguage(
                     (new LanguageInfo())
-                        ->setLanguageConstant('languageConstants/1017')
+                        // Dil sabiti hedeflemesi: tr = languageConstants/1037.
+                        // UYARI: 1017 Çince (basitleştirilmiş)'tir (zh_CN) — eski
+                        // kampanyalar 24268992914 vb. bu yüzden yanlış dilli
+                        // oluşturuldu. Doğrulama: Google Ads "Codes and formats"
+                        // dil sabitleri tablosu + canlı kampanya gözlemi
+                        // (PROMPT-21.1); canlı GAQL:
+                        // SELECT language_constant.id, language_constant.code,
+                        // language_constant.name FROM language_constant
+                        // WHERE language_constant.code = 'tr'  ->  id = 1037.
+                        ->setLanguageConstant('languageConstants/1037')
                 )
         ));
         $islemler[] = $dil_islemi;
