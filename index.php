@@ -8,16 +8,37 @@
 
 require_once __DIR__ . '/php/servis/kullanici-servisi.php';
 require_once __DIR__ . '/php/servis/hesap-servisi.php';
+require_once __DIR__ . '/php/teshis-log.php';
+
+// PROMPT-22: Oturuma özel dinamik panel içeriği asla önbelleklenmemelidir
+// (LiteSpeed/CDN HTML cache riski). POST işlenmeden önce, her yanıtta gönderilir.
+header('Cache-Control: no-store, private');
+header('Pragma: no-cache');
 
 $mesaj = '';
+
+oturum_baslat();
+teshis_logla('index-giris', [
+    'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+    'uri' => $_SERVER['REQUEST_URI'] ?? '-',
+    'sahip_no' => (string) (oturum_sahip_no() ?? 'null'),
+]);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $form_islem = $_POST['form_islem'] ?? '';
 
     try {
         if ($form_islem === 'kayit') {
-            $cevap = kullanici_kayit($_POST);
+            // PROMPT-22 Görev B: Public kayıt kapalıdır (ARCHITECTURE.md §1:
+            // "Kayıt herkese açık değildir; yeni kullanıcı erişimi
+            // manuel/davet yoluyla verilir"). Yeni hesap yalnızca sunucuda
+            // bin/kullanici-olustur.php (CLI) ile oluşturulur.
+            $cevap = [
+                'return' => 0,
+                'mesaj' => 'Kayıt şu anda davetle sınırlıdır.',
+            ];
         } elseif ($form_islem === 'giris') {
+            teshis_logla('index-post-giris-denemesi');
             $cevap = kullanici_giris($_POST);
         } else {
             $cevap = [
@@ -25,6 +46,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'mesaj' => 'Geçersiz form işlemi.',
             ];
         }
+
+        teshis_logla('index-post-sonuc', [
+            'form_islem' => $form_islem,
+            'return' => (string) ($cevap['return'] ?? 0),
+            'sahip_no' => (string) (oturum_sahip_no() ?? 'null'),
+        ]);
 
         if (($cevap['return'] ?? 0) === 1) {
             header('Location: index.php');

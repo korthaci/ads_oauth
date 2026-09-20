@@ -1465,3 +1465,83 @@ dil hedefiyle çıktı.
 2. **Eski yanlış-dilli test kampanyaları** (`24268992914`, `24276234886`,
    `24265218474` vb.) otomatik düzeltilmedi; dilediğini arayüzden Türkçe'ye
    çevir veya `REMOVED` yap (senin kararın).
+
+---
+
+## PROMPT-22 — Kayıt Güvenliği Kilidi + Çoklu Kullanıcı İzolasyonu Teşhisi
+
+### Görev A — İzolasyon teşhisi (ÖNCELİKLİ; kök neden KORT'UN CANLI TESTİNİ BEKLİYOR)
+
+**Statik kod incelemesi (salt-okuma):** `baglanmis_hesaplar`'a giden her sorgu
+(`google_aktif_baglantiyi_al`, `google_panel_baglantisini_al`,
+`google_kampanya_baglantisini_al`, OAuth callback INSERT/UPDATE `FOR UPDATE`)
+`sahip_no` parametresiyle filtreleniyor; `kullanici_oturum_ac()`
+`session_regenerate_id(true)` + doğru `sahip_no` yazıyor. Kod düzeyinde
+sızıntı noktası BULUNAMADI.
+
+**Statik cache bulgusu (KALICI DÜZELTME UYGULANDI):** `index.php` hiçbir
+`Cache-Control` header'ı göndermiyordu; `.htaccess`'te de önbellek kuralı yoktu.
+Oturuma özel HTML'in hostinge bağlı önbellek (LiteSpeed Cache / CDN) tarafından
+başka oturuma servis edilmesi GERÇEK risk. → `index.php` en başına
+`header('Cache-Control: no-store, private'); header('Pragma: no-cache');`
+eklendi (oturum başlamadan, POST işlenmeden önce). Bu düzeltme kalıcıdır.
+
+**GECİÇİ teşhis logu AKTİF (düzeltme doğrulandıktan sonra TAMAMEN kaldırılacak):**
+- `php/teshis-log.php` + çağrı noktaları:
+  `index.php` (`index-giris`, `index-post-giris-denemesi`,
+  `index-post-sonuc`), `hesap-servisi.php` (`panel-sorgu`: parametre
+  sahip_no ↔ sorgunun döndürdüğü harici_kimlik), `kullanici-servisi.php`
+  (`oturum-ac`: regenerate öncesi/sonrası sid hash + sahip_no).
+- Log dosyası web'den ERİŞİLEMEYEN PHP geçici dizinindedir:
+  `sys_get_temp_dir() . '/ads-oauth-izolasyon-teshis.log'`
+  (sunucuda yolu görmek için: `php -r "echo sys_get_temp_dir();"`).
+- Loglanmaz: şifre, token, ham session cookie. Yalnızca sha256 ilk 8
+  karakterlik sid hash'i yazılır. Yerel doğrulama örnek satırları:
+  `2026-09-20 16:34:32 | oturum-ac | sahip_no=7 | eski_sid=ae676fe9 | yeni_sid=18470d29`
+  `2026-09-20 16:34:59 | index-giris | method=POST | sahip_no=null | sid=bc15b954`
+  `2026-09-20 16:34:59 | index-post-sonuc | form_islem=kayit | return=0 | sahip_no=null`
+
+**KORT CANLI TEST 1 (izolasyon):** Daha önceki senaryoyu FİREFOX'ta tekrarla:
+yeni kayıt denemesi artık reddedilir (aşağıda) → **kendi hesabınla GİRİŞ yap**
+(veya sana CLI ile yeni hesap açılır) → ana sayfayı aç. Ardından log dosyasını
+paylaş. Log'ta beklenenler: yeni kayıt/girişte `oturum-ac` satırında YENİ
+`yeni_sid` + doğru `sahip_no`; `panel-sorgu` satırında `param_sahip_no` ile
+`donen_harici_kimlik` ÜSTÜSTE DÜŞMELİ. Eğer tarayıcıda yanlış (eski) hesap
+görünüp log'ta doğru hesap dönüyorsa → kesin HTML cache (artık no-store ile
+düzeltildi; deploy sonrası tekrar test et). Eğer log'ta yanlış sahip_no
+geçiyorsa → kod hatası var, kök neden tekrar incelenir. Eğer her şey doğruysa
+→ önceki gözlem insan hatasıydı (Firefox autofill ile eski hesaba girilmiş
+olması en olası); bu DURUM'a açıkça işlenir.
+
+### Görev B — Kayıt güvenliği kilidi (TAMAMLANDI)
+
+1. `index.php` `form_islem === 'kayit'` dalı artık hesap OLUŞTURMAZ;
+   `return: 0` + mesaj `"Kayıt şu anda davetle sınırlıdır."` döner.
+   (`kullanici_kayit()` fonksiyonu değişmedi; web akışından artık çağrılmaz.)
+2. `tema/giris.php`: Kayıt formu/bölümü kaldırıldı; sayfa başlığı
+   "Giriş - ads_oauth"; altına "Kayıt davetle sınırlıdır" notu eklendi.
+   Yerel render testi: alert mesajı göründü, giriş formu duruyor, kayıt
+   formu yok, `site_sahipleri` satır sayısı DEĞİŞMEDİ (geçici test: exit 0).
+3. Yeni `bin/kullanici-olustur.php` (yalnızca CLI): `kullanici_kayit()`'ı
+   çağırır (doğrulama + hash mantığı kopyalanmaz), argüman hatası → kullanım
+   mesajı, başarısızlık → mesaj + exit 1. HTTP erişimine karşı ÇİFT KATMAN:
+   `PHP_SAPI !== 'cli'` → 403; `.htaccess`'e `RewriteRule ^bin/ - [F,L]`
+   eklendi. Yerel test: gerçek kullanıcı oluşturuldu ("Site sahibi
+   oluşturuldu: prompt22-…@example.invalid", exit 0; DB'de doğrulandı), test
+   sonrasında satır temizlendi (DELETE rowCount=1).
+   **Kort için örnek komut (sunucuda, proje kökünde):**
+   `php bin/kullanici-olustur.php kisi@ornek.com 'GucluBirSifre123' "Ayşe Yılmaz"`
+   (Not: şifre shell geçmişine düşebilir; gerekirse geçmişi temizle.)
+4. DB şeması değişmedi; davet-kodu mekanizması eklenmedi (ARCHITECTURE.md §1
+   "manuel" tanımı bu yaklaşımla karşılanıyor).
+
+`php -l`: index.php, tema/giris.php, bin/kullanici-olustur.php,
+php/teshis-log.php, php/servis/kullanici-servisi.php,
+php/servis/hesap-servisi.php — HEPSİ temiz.
+
+**KORT CANLI TEST 2 (kayıt kilidi):** `https://n0n1.tr/ads-oauth/` üzerinde
+(form POST ile) `form_islem=kayit` gönderildiğinde artık
+"Kayıt şu anda davetle sınırlıdır." mesajı dönmeli ve hesap oluşmamalı;
+giriş ekranında kayıt formu görünmemeli. Deploy sonrası NO-STORE header'ın
+gerçekten ulaştığını da teyit et (DevTools → Network → index.php yanıt
+başlıkları: `Cache-Control: no-store, private`).

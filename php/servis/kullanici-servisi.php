@@ -9,6 +9,7 @@
 
 require_once dirname(__DIR__) . '/oturum.php';
 require_once dirname(__DIR__) . '/veritabani.php';
+require_once dirname(__DIR__) . '/teshis-log.php'; // PROMPT-22 GECICI teshis; kaldirilacak.
 
 /**
  * E-posta girdisini karsilastirmalarda kullanilacak sekilde normalize eder.
@@ -75,9 +76,19 @@ function kullanici_oturum_ac(int $sahip_no): void
 
     oturum_baslat();
 
+    // PROMPT-22 GECICI teshis: session yenileme oncesi/sonrasi sid hash'i
+    // karsilastirilir (ham cookie degeri YAZILMAZ).
+    $eski_sid_hash = substr(hash('sha256', session_id()), 0, 8);
+
     if (!session_regenerate_id(true)) {
         throw new RuntimeException('Oturum güvenli şekilde yenilenemedi.');
     }
+
+    teshis_logla('oturum-ac', [
+        'sahip_no' => (string) $sahip_no,
+        'eski_sid' => $eski_sid_hash,
+        'yeni_sid' => substr(hash('sha256', session_id()), 0, 8),
+    ]);
 
     oturum_sahip_no_yaz($sahip_no);
 }

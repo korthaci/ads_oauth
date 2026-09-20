@@ -10,6 +10,8 @@ require_once dirname(__DIR__) . '/oturum.php';
 require_once dirname(__DIR__) . '/sifreleme.php';
 require_once dirname(__DIR__) . '/veritabani.php';
 require_once dirname(__DIR__) . '/baglayici/google-ads-baglayici.php';
+require_once dirname(__DIR__) . '/teshis-log.php'; // PROMPT-22 GECICI teshis; kaldirilacak.
+
 
 /**
  * Oturum sahibinin aktif ve refresh token iceren Google OAuth baglantisini alir.
@@ -79,6 +81,15 @@ function google_panel_baglantisini_al(int $sahip_no): ?array
     ]);
 
     $baglanti = $sorgu->fetch();
+
+    // PROMPT-22 GECICI teshis: parametre olarak gecen sahip_no ile sorgunun
+    // gercekte dondurdugu kayit karsilastirilir (token YAZILMAZ).
+    teshis_logla('panel-sorgu', [
+        'param_sahip_no' => (string) $sahip_no,
+        'donen_harici_kimlik' => is_array($baglanti)
+            ? (string) ($baglanti['harici_kimlik'] ?? 'null')
+            : 'null',
+    ]);
 
     if (!is_array($baglanti)) {
         return null;
