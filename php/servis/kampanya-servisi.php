@@ -304,6 +304,111 @@ function kampanya_metnini_listeye_ayir(string $metin): array
 }
 
 /**
+ * Yaklasik toplam butceden kampanya bitis tarihini hesaplar (PROMPT-21 §3).
+ *
+ * bitis = bugun + floor(toplam_micros / gunluk_micros) gun. floor, micros
+ * cinsinden tam sayi bolmesiyle (intdiv) hesaplanir; toplam butce gunluk
+ * butceden kucukse InvalidArgumentException firlatir (sessizce 0/1 güne
+ * yuvarlanmaz). Donen tarih kesin bir toplam harcama garantisi DEGILDIR;
+ * yalnizca kampanyanin belirtilen gunde otomatik durmasini saglar (Google
+ * gunluk butceyi bazi gunlerde asabilir ve ayi ortalayabilir).
+ *
+ * $bugun 'Y-m-d' formatinda verilmelidir; hesap deterministik olsun diye
+ * UTC kabul edilir.
+ *
+ * @throws InvalidArgumentException
+ */
+function kampanya_bitis_tarihi_hesapla(
+    string $bugun,
+    int $toplam_micros,
+    int $gunluk_micros
+): string {
+    if ($gunluk_micros <= 0) {
+        throw new InvalidArgumentException('Günlük bütçe 0’dan büyük olmalıdır.');
+    }
+
+    if ($toplam_micros < $gunluk_micros) {
+        throw new InvalidArgumentException(
+            'Toplam bütçe günlük bütçeden küçük olamaz; en az bir günlük bütçeye '
+            . 'eşit olmalı. Yaklaşık bitiş tarihi hesaplanamadı.'
+        );
+    }
+
+    $gun = intdiv($toplam_micros, $gunluk_micros);
+
+    if ($gun < 1) {
+        $gun = 1;
+    }
+
+    $bugun_zamani = DateTime::createFromFormat('!Y-m-d', $bugun, new DateTimeZone('UTC'));
+
+    if ($bugun_zamani === false) {
+        throw new InvalidArgumentException('Bugünün tarihi çözümlenemedi.');
+    }
+
+    $bugun_zamani->modify('+' . $gun . ' days');
+
+    return $bugun_zamani->format('Y-m-d');
+}
+
+/**
+ * Kullanicinin onceki belirsizlik adiminda sectigi geoTargetConstant kaynak
+ * adinin bu istekte kullanilabilir olup olmadigini soyler (PROMPT-21 §1.1.4).
+ * Kaynak adi gecerli formatta olmali ve secimin hangi konum metni icin
+ * yapildigi su an istenen metinle ayni olmali; metin degistiyse secim
+ * gecersizdir ve suggest cagrisi yeniden yapilir.
+ */
+function kampanya_konum_secimi_kullanilabilir(
+    string $secilen_kaynak,
+    string $secilen_metin,
+    string $aktif_metin
+): bool {
+    return $secilen_kaynak !== ''
+        && preg_match('/^geoTargetConstants\/[0-9]+$/', $secilen_kaynak) === 1
+        && $secilen_metin === $aktif_metin;
+}
+
+/**
+ * Belirsiz konum icin frontend'e secenek listesi dondurur; mutate HIC
+ * denenmez (PROMPT-21 §1.1.2).
+ *
+ * @param list<array{
+ *     resource_name: string,
+ *     name: string,
+ *     target_type: string,
+ *     canonical_name: string
+ * }> $adaylar
+ *
+ * @return array<string, mixed>
+ */
+function kampanya_konum_secimi_istegi_dondur(
+    string $metin,
+    string $baglam,
+    array $adaylar
+): array {
+    $secenekler = [];
+
+    foreach ($adaylar as $aday) {
+        $secenekler[] = [
+            'resource_name' => (string) $aday['resource_name'],
+            'ad' => (string) $aday['name'],
+            'tip' => (string) $aday['target_type'],
+            'canonical_name' => (string) $aday['canonical_name'],
+        ];
+    }
+
+    return [
+        'return' => 0,
+        'mesaj' => 'Konum belirsiz, lütfen birini seçin.',
+        'konum_secenekleri' => $secenekler,
+        'konum_secenekleri_baglam' => $baglam,
+        'konum_secenekleri_metin' => $metin,
+    ];
+}
+
+/**
+ * Kullanicinin TL cinsinden gunluk butce girdisini Google Ads
+/**
  * Kullanicinin TL cinsinden gunluk butce girdisini Google Ads
  * budget_amount_micros degerine cevirir (TL * 1.000.000).
  *
@@ -313,7 +418,7 @@ function kampanya_metnini_listeye_ayir(string $metin): array
  *
  * @throws InvalidArgumentException
  */
-function kampanya_butcesini_microsa_cevir(mixed $girdi): int
+function kampanya_butcesini_microsa_cevir(mixed $girdi, string $etiket = 'Günlük bütçe'): int
 {
     $metin = '';
 
@@ -324,7 +429,7 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi): int
     }
 
     if ($metin === '') {
-        throw new InvalidArgumentException('Günlük bütçe zorunludur.');
+        throw new InvalidArgumentException($etiket . ' zorunludur.');
     }
 
     $metin = trim((string) preg_replace('/\s*(?:tl|₺)\s*$/iu', '', $metin));
@@ -332,7 +437,7 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi): int
 
     if (preg_match('/^(\d{1,12})(?:\.(\d{1,2}))?$/', $metin, $parcalar) !== 1) {
         throw new InvalidArgumentException(
-            'Günlük bütçe geçerli bir sayı değil (örnek: 500 veya 12,50).'
+            $etiket . ' geçerli bir sayı değil (örnek: 500 veya 12,50).'
         );
     }
 
@@ -343,7 +448,7 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi): int
     $micros = ((int) $parcalar[1]) * 1000000 + (int) $ondalik;
 
     if ($micros <= 0) {
-        throw new InvalidArgumentException('Günlük bütçe 0’dan büyük olmalıdır.');
+        throw new InvalidArgumentException($etiket . ' 0’dan büyük olmalıdır.');
     }
 
     return $micros;
@@ -353,10 +458,13 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi): int
 /**
  * Sihirbaz formundan gelen girdileri dogrular ve mutate planini uretir.
  *
- * Kurallar (PROMPT-20 §4): web sitesi URL (https:// eksikse eklenir), kampanya
- * adi 1-255 karakter, basliklar 3-15 adet ve her biri 30 karakter, aciklamalar
- * 2-4 adet ve her biri 90 karakter, anahtar kelimeler 1-20 adet ve her biri
- * 80 karakter, gunluk butce pozitif sayi, hedef konum 1-100 karakter.
+ * Kurallar (PROMPT-20 §4, PROMPT-21): web sitesi URL (https:// eksikse eklenir),
+ * kampanya adi 1-255 karakter, basliklar 3-15 adet ve her biri 30 karakter,
+ * aciklamalar 2-4 adet ve her biri 90 karakter, anahtar kelimeler 1-20 adet ve
+ * her biri 80 karakter, gunluk butce pozitif sayi, hedef konum 1-100 karakter,
+ * haric tutulan konumlar 0-20 adet (opsiyonel; her biri 1-100 karakter),
+ * toplam butce opsiyonel pozitif sayi (gunluk butceden kucukse bitis tarihi
+ * hesaplarken reddedilir).
  *
  * @return array{
  *     kampanya_adi: string,
@@ -366,7 +474,9 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi): int
  *     anahtar_kelimeler: array<int, string>,
  *     butce_micros: int,
  *     gunluk_butce_tl: string,
- *     hedef_konum: string
+ *     hedef_konum: string,
+ *     haric_konumlar: list<string>,
+ *     toplam_butce_micros: ?int
  * }
  *
  * @throws InvalidArgumentException
@@ -484,6 +594,34 @@ function kampanya_girdilerini_dogrula(array $girdiler): array
         );
     }
 
+    // PROMPT-21: opsiyonel hariç tutulan konumlar — her biri hedef konumla aynı
+    // çözümleme mantığından geçer; her biri en fazla 100 karakter, toplamda en
+    // fazla 20 adet.
+    $haric_konumlar = kampanya_metnini_listeye_ayir(
+        (string) ($girdiler['haric_konumlar'] ?? '')
+    );
+
+    if (count($haric_konumlar) > 20) {
+        throw new InvalidArgumentException(
+            'En fazla 20 hariç tutulan konum kabul edilir.'
+        );
+    }
+
+    foreach ($haric_konumlar as $haric_konum) {
+        if (mb_strlen($haric_konum) > 100) {
+            throw new InvalidArgumentException(
+                'Hariç tutulan konumlar en fazla 100 karakter olabilir.'
+            );
+        }
+    }
+
+    // PROMPT-21: opsiyonel yaklaşık toplam bütçe (TL). Boşsa kampanya bitiş
+    // tarihsiz (süresiz) oluşturulur; doldurulursa end_date hesaplanır.
+    $toplam_butce_metni = trim((string) ($girdiler['toplam_butce'] ?? ''));
+    $toplam_butce_micros = $toplam_butce_metni === ''
+        ? null
+        : kampanya_butcesini_microsa_cevir($toplam_butce_metni, 'Toplam bütçe');
+
     return [
         'kampanya_adi' => $kampanya_adi,
         'web_sitesi' => $web_sitesi,
@@ -493,6 +631,8 @@ function kampanya_girdilerini_dogrula(array $girdiler): array
         'butce_micros' => $butce_micros,
         'gunluk_butce_tl' => number_format($butce_micros / 1000000, 2, '.', ''),
         'hedef_konum' => $hedef_konum,
+        'haric_konumlar' => $haric_konumlar,
+        'toplam_butce_micros' => $toplam_butce_micros,
     ];
 }
 
@@ -504,7 +644,9 @@ function kampanya_girdilerini_dogrula(array $girdiler): array
  * token cozme -> taze manager kontrolu (salt-okunur customer sorgusu) ->
  * konum cozumleme (salt-okunur suggestGeoTargetConstants) -> tek atomik
  * mutate istegi. Manager hesaba hicbir mutate denenmez; kampanya her zaman
- * PAUSED olusturulur.
+ * PAUSED olusturulur. Konum belirsizse (birden fazla tam eslesme) mutate HIC
+ * denenmez; cagiran tarafa aday listesi (konum_secenekleri) dondurulur ve
+ * kullanici secimi frontend'de alinir (PROMPT-21).
  *
  * @param array<string, mixed> $girdiler
  *
@@ -575,12 +717,135 @@ function kampanya_olustur(array $girdiler): array
             ];
         }
 
-        $konum = google_ads_konum_onerilerini_al($refresh_token, $plan['hedef_konum']);
+        // PROMPT-21 §1.1.3: kullanıcının önceki belirsizlik adımında seçtiği
+        // kaynak ad yalnızca hedef konum metni değişmemişse kullanılır; metin
+        // değiştiyse seçim geçersizdir ve suggest çağrısı yeniden yapılır.
+        $secilen_hedef_kaynagi = trim(
+            (string) ($girdiler['hedef_konum_resource_name'] ?? '')
+        );
+        $secilen_hedef_metni = trim(
+            (string) ($girdiler['hedef_konum_kaynak_metin'] ?? '')
+        );
+
+        if (
+            kampanya_konum_secimi_kullanilabilir(
+                $secilen_hedef_kaynagi,
+                $secilen_hedef_metni,
+                $plan['hedef_konum']
+            )
+        ) {
+            $hedef_konum = [
+                'resource_name' => $secilen_hedef_kaynagi,
+                'name' => $plan['hedef_konum'],
+                'target_type' => 'kullanici_secimi',
+                'canonical_name' => '',
+            ];
+        } else {
+            $konum_cozumu = google_ads_konum_onerilerini_al(
+                $refresh_token,
+                $plan['hedef_konum']
+            );
+
+            if ($konum_cozumu['durum'] === 'belirsiz') {
+                return kampanya_konum_secimi_istegi_dondur(
+                    $plan['hedef_konum'],
+                    'hedef',
+                    $konum_cozumu['adaylar']
+                );
+            }
+
+            $hedef_konum = $konum_cozumu['konum'];
+        }
+
+        // PROMPT-21 §2.2: her hariç tutulan konum hedef konumla aynı çözümleme
+        // mantığından geçer. Basit tutulur: ilk belirsiz olan için seçim istenir,
+        // o çözülünce bir sonraki istekte varsa diğer belirsiz konum istenir.
+        $haric_konum_kaynaklari = [];
+
+        foreach ($plan['haric_konumlar'] as $haric_metin) {
+            $secilen_haric_kaynagi = trim(
+                (string) ($girdiler['haric_konum_resource_name'] ?? '')
+            );
+            $secilen_haric_metni = trim(
+                (string) ($girdiler['haric_konum_kaynak_metin'] ?? '')
+            );
+
+            if (
+                kampanya_konum_secimi_kullanilabilir(
+                    $secilen_haric_kaynagi,
+                    $secilen_haric_metni,
+                    $haric_metin
+                )
+            ) {
+                $haric_konum_kaynaklari[] = $secilen_haric_kaynagi;
+                continue;
+            }
+
+            $haric_cozumu = google_ads_konum_onerilerini_al(
+                $refresh_token,
+                $haric_metin
+            );
+
+            if ($haric_cozumu['durum'] === 'belirsiz') {
+                return kampanya_konum_secimi_istegi_dondur(
+                    $haric_metin,
+                    'haric',
+                    $haric_cozumu['adaylar']
+                );
+            }
+
+            $haric_konum_kaynaklari[] = $haric_cozumu['konum']['resource_name'];
+        }
+
+        // PROMPT-21 §2.4: hedef konumla aynı bir yer hariç tutulmaya
+        // çalışılırsa anlamlı hata; sessizce yok sayılmaz.
+        foreach ($plan['haric_konumlar'] as $indeks => $haric_metin) {
+            if ($haric_konum_kaynaklari[$indeks] === $hedef_konum['resource_name']) {
+                return [
+                    'return' => 0,
+                    'mesaj' => 'Aynı konum hem hedef hem hariç tutulan olamaz: '
+                        . $haric_metin . '. Farklı bir hariç konum yazın.',
+                ];
+            }
+        }
+
+        if (
+            count(array_unique($haric_konum_kaynaklari))
+            !== count($haric_konum_kaynaklari)
+        ) {
+            return [
+                'return' => 0,
+                'mesaj' => 'Hariç tutulan konumlar arasında aynı konum birden '
+                    . 'fazla kez geçiyor; listeyi düzeltin.',
+            ];
+        }
+
+        // PROMPT-21 §3: yaklaşık toplam bütçe -> bitiş tarihi (kesin harcama
+        // garantisi değildir; kampanyanın belirli bir tarihte otomatik durmasını
+        // sağlar). Günlük bütçeden küçük toplam bütçe reddedilir.
+        $bitis_tarihi = null;
+
+        if ($plan['toplam_butce_micros'] !== null) {
+            try {
+                $bitis_tarihi = kampanya_bitis_tarihi_hesapla(
+                    date('Y-m-d'),
+                    $plan['toplam_butce_micros'],
+                    $plan['butce_micros']
+                );
+            } catch (InvalidArgumentException $hata) {
+                return [
+                    'return' => 0,
+                    'mesaj' => $hata->getMessage(),
+                ];
+            }
+        }
 
         $sonuc = google_ads_kampanya_olustur($refresh_token, $customer_id, [
             'kampanya_adi' => $plan['kampanya_adi'],
             'butce_micros' => $plan['butce_micros'],
-            'konum_kaynagi' => $konum['resource_name'],
+            'konum_kaynagi' => $hedef_konum['resource_name'],
+            'haric_konum_kaynaklari' => $haric_konum_kaynaklari,
+            'bitis_tarihi' => $bitis_tarihi,
             'basliklar' => $plan['basliklar'],
             'aciklamalar' => $plan['aciklamalar'],
             'anahtar_kelimeler' => $plan['anahtar_kelimeler'],

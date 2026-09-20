@@ -789,66 +789,31 @@ function google_ads_kampanyalari_listele(
 }
 
 /**
- * Belirsiz konum eslesmelerinde adaylari hedef turu ve ornek canonical_name
- * degerleriyle (en fazla 5) listeleyen, kullaniciya aciklanabilir hata mesaji
- * uretir.
- *
- * @param array<int, array{
- *     resource_name: string,
- *     name: string,
- *     target_type: string,
- *     canonical_name: string
- * }> $tam_eslesenler
- */
-function google_ads_konum_belirsizlik_mesaji(array $tam_eslesenler): string
-{
-    $aday_ozetleri = [];
-    $kanonik_ornekler = [];
-
-    foreach (array_slice($tam_eslesenler, 0, 5) as $aday) {
-        $ad = trim((string) ($aday['name'] ?? ''));
-
-        if ($ad === '') {
-            continue;
-        }
-
-        $tur = trim((string) ($aday['target_type'] ?? ''));
-        $kanonik = trim((string) ($aday['canonical_name'] ?? ''));
-
-        $aday_ozetleri[] = $ad . ($tur === '' ? '' : ' (' . $tur . ')');
-
-        if ($kanonik !== '') {
-            $kanonik_ornekler[] = $kanonik;
-        }
-    }
-
-    $mesaj = 'Aynı adlı birden fazla Google Ads konumu bulundu: '
-        . implode(', ', $aday_ozetleri) . '.';
-
-    if ($kanonik_ornekler === []) {
-        return $mesaj . ' Lütfen konumu il/ilçe bilgisiyle daha belirgin yazın.';
-    }
-
-    return $mesaj
-        . " Lütfen 'canonical_name' değerlerinden birine göre daha belirgin yazın"
-        . ' (örn. tam il/ilçe adı). Örnek canonical_name değerleri: '
-        . implode(' | ', $kanonik_ornekler) . '.';
-}
-
-/**
  * SuggestGeoTargetConstants yanitini tarayip buyuk/kucuk harf duyarsiz tam isim
- * eslesmesini dondurur. Tam eslesme yoksa/tekil degilse, adaylari aciklayan
- * GoogleAdsKesifHatasi firlatir; en yakin eslesme sessizce secilmez.
+ * eslesmesini degerlendirir (PROMPT-21). Tek tam eslesme 'tek' durumuyla kaydi
+ * dondurur; ayni adli birden fazla tam eslesme artik hata FIRLATMAZ, 'belirsiz'
+ * durumuyla adaylarin tam listesini (resource_name, name, target_type,
+ * canonical_name) cagiran koda dondurur; kullanici secimi frontend'de alinir
+ * (sessiz best-match yok). Tam eslesme yoksa, bulunabilirsa ornek onerilerle
+ * birlikte GoogleAdsKesifHatasi firlatir.
  *
  * Saf fonksiyondur: Google Ads API cagrisi yapmaz; sentetik response ile test
- * edilebilir. Tam eslesme karar mantigi PROMPT-20.3 ile degismemistir; yalnizca
- * kayitlara target_type/canonical_name eklendi ve belirsizlik mesaji zenginlesti.
+ * edilebilir. Tam eslesme karar mantigi PROMPT-20.3 ile degismemistir.
  *
  * @return array{
- *     resource_name: string,
- *     name: string,
- *     target_type: string,
- *     canonical_name: string
+ *     durum: 'tek'|'belirsiz',
+ *     konum: ?array{
+ *         resource_name: string,
+ *         name: string,
+ *         target_type: string,
+ *         canonical_name: string
+ *     },
+ *     adaylar: list<array{
+ *         resource_name: string,
+ *         name: string,
+ *         target_type: string,
+ *         canonical_name: string
+ *     }>
  * }
  */
 function google_ads_konum_yanitini_isle(
@@ -897,14 +862,19 @@ function google_ads_konum_yanitini_isle(
     }
 
     if (count($tam_eslesenler) === 1) {
-        return $tam_eslesenler[0];
+        return [
+            'durum' => 'tek',
+            'konum' => $tam_eslesenler[0],
+            'adaylar' => [],
+        ];
     }
 
     if (count($tam_eslesenler) > 1) {
-        throw new GoogleAdsKesifHatasi(
-            google_ads_konum_belirsizlik_mesaji($tam_eslesenler),
-            'girdi'
-        );
+        return [
+            'durum' => 'belirsiz',
+            'konum' => null,
+            'adaylar' => $tam_eslesenler,
+        ];
     }
 
     if ($oneriler === []) {
@@ -932,15 +902,25 @@ function google_ads_konum_yanitini_isle(
  * kullanir; mutate cagrisi yapmaz.
  *
  * Yalnizca tam (buyuk/kucuk harf duyarsiz) isim eslesmesi kabul edilir; en yakin
- * eslesme sessizce secilmez. Tam eslesme yoksa, bulunabilirse ornek onerilerle
- * birlikte hata firlatilir. Ayni adli birden fazla tam eslesme varsa, adaylarin
- * target_type ve ornek canonical_name degerleri hata mesajinda listelenir.
+ * eslesme sessizce secilmez. Tam eslesme yoksa, bulunabilirsa ornek onerilerle
+ * birlikte hata firlatilir. Ayni adli birden fazla tam eslesme varsa artik hata
+ * firlatilmaz (PROMPT-21): 'belirsiz' durumuyla adaylarin tam listesi cagiran
+ * koda dondurur ve kullanici secimi frontend'de alinir.
  *
  * @return array{
- *     resource_name: string,
- *     name: string,
- *     target_type: string,
- *     canonical_name: string
+ *     durum: 'tek'|'belirsiz',
+ *     konum: ?array{
+ *         resource_name: string,
+ *         name: string,
+ *         target_type: string,
+ *         canonical_name: string
+ *     },
+ *     adaylar: list<array{
+ *         resource_name: string,
+ *         name: string,
+ *         target_type: string,
+ *         canonical_name: string
+ *     }>
  * }
  */
 function google_ads_konum_onerilerini_al(
@@ -1021,6 +1001,8 @@ function google_ads_kampanya_id_al(string $kampanya_kaynagi): ?string
  *     kampanya_adi: string,
  *     butce_micros: int,
  *     konum_kaynagi: string,
+ *     haric_konum_kaynaklari?: array<int, string>,
+ *     bitis_tarihi?: ?string,
  *     basliklar: array<int, string>,
  *     aciklamalar: array<int, string>,
  *     anahtar_kelimeler: array<int, string>,
@@ -1074,6 +1056,58 @@ function google_ads_kampanya_olustur(
         }
     }
 
+    // PROMPT-21: opsiyonel hariç tutulan konum kaynakları — her biri geçerli
+    // bir geoTargetConstant kaynak adı olmalı (kullanıcının bilinçli seçimi;
+    // sessiz best-match yok).
+    $haric_konum_kaynaklari = array_values(
+        is_array($plan['haric_konum_kaynaklari'] ?? null)
+            ? $plan['haric_konum_kaynaklari']
+            : []
+    );
+
+    if (count($haric_konum_kaynaklari) > 20) {
+        throw new GoogleAdsKesifHatasi(
+            'Hariç tutulan konum listesi en fazla 20 adet olabilir.',
+            'girdi'
+        );
+    }
+
+    foreach ($haric_konum_kaynaklari as $haric_kaynak) {
+        if (
+            !is_string($haric_kaynak)
+            || preg_match('/^geoTargetConstants\/[0-9]+$/', $haric_kaynak) !== 1
+        ) {
+            throw new GoogleAdsKesifHatasi(
+                'Hariç tutulan konum kaynak adı geçersiz.',
+                'girdi'
+            );
+        }
+    }
+
+    // PROMPT-21: opsiyonel bitiş tarihi (yaklaşık toplam bütçe kontrolü);
+    // kampanya bitişsiz oluşturulursa alan yok sayılır.
+    $bitis_tarihi = array_key_exists('bitis_tarihi', $plan)
+        && is_string($plan['bitis_tarihi'])
+        ? $plan['bitis_tarihi']
+        : null;
+
+    if (
+        $bitis_tarihi !== null
+        && (
+            preg_match('/^\d{4}-\d{2}-\d{2}$/', $bitis_tarihi) !== 1
+            || checkdate(
+                (int) substr($bitis_tarihi, 5, 2),
+                (int) substr($bitis_tarihi, 8, 2),
+                (int) substr($bitis_tarihi, 0, 4)
+            ) !== true
+        )
+    ) {
+        throw new GoogleAdsKesifHatasi(
+            'Kampanya bitiş tarihi geçersiz (beklenen format: YYYY-MM-DD).',
+            'girdi'
+        );
+    }
+
     $client = google_ads_client_olustur($refresh_token);
     $on_ek = 'customers/' . $customer_id;
 
@@ -1090,30 +1124,40 @@ function google_ads_kampanya_olustur(
         ));
         $islemler[] = $butce_islemi;
 
+        $yeniden_kampanya = (new Campaign())
+            ->setResourceName($on_ek . '/campaigns/-2')
+            ->setName($plan['kampanya_adi'])
+            ->setAdvertisingChannelType(AdvertisingChannelType::SEARCH)
+            ->setStatus(CampaignStatus::PAUSED)
+            // AB Siyasi Reklam Şeffaflık Yönetmeliği (TTPA) gereği zorunlu:
+            // 03.09.2025'ten itibaren API ile oluşturulan tüm yeni kampanyalarda
+            // açık beyan şart. Bu proje siyasi reklam içermez; değer hardcoded
+            // tutulur, kullanıcıya sorulmaz.
+            ->setContainsEuPoliticalAdvertising(
+                EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
+            ->setCampaignBudget($on_ek . '/campaignBudgets/-1')
+            ->setTargetSpend(new TargetSpend())
+            ->setNetworkSettings(
+                (new NetworkSettings())
+                    ->setTargetGoogleSearch(true)
+                    ->setTargetSearchNetwork(false)
+                    ->setTargetContentNetwork(false)
+                    ->setTargetPartnerSearchNetwork(false)
+            );
+
+        if ($bitis_tarihi !== null) {
+            // V25'te campaign.end_date alanı yok; end_date_time (YYYY-MM-DD
+            // HH:MM:SS, hesabın saat diliminde) kullanılır. 23:59:59 ile
+            // belirlenen günün sonuna kadar çalışır (yaklaşık toplam bütçe
+            // kontrolü; kesin harcama garantisi değildir — PROMPT-21 §3).
+            $yeniden_kampanya->setEndDateTime($bitis_tarihi . ' 23:59:59');
+        }
+
         $kampanya_islemi = new MutateOperation();
-        $kampanya_islemi->setCampaignOperation((new CampaignOperation())->setCreate(
-            (new Campaign())
-                ->setResourceName($on_ek . '/campaigns/-2')
-                ->setName($plan['kampanya_adi'])
-                ->setAdvertisingChannelType(AdvertisingChannelType::SEARCH)
-                ->setStatus(CampaignStatus::PAUSED)
-                // AB Siyasi Reklam Şeffaflık Yönetmeliği (TTPA) gereği zorunlu:
-                // 03.09.2025'ten itibaren API ile oluşturulan tüm yeni kampanyalarda
-                // açık beyan şart. Bu proje siyasi reklam içermez; değer hardcoded
-                // tutulur, kullanıcıya sorulmaz.
-                ->setContainsEuPoliticalAdvertising(
-                    EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
-                )
-                ->setCampaignBudget($on_ek . '/campaignBudgets/-1')
-                ->setTargetSpend(new TargetSpend())
-                ->setNetworkSettings(
-                    (new NetworkSettings())
-                        ->setTargetGoogleSearch(true)
-                        ->setTargetSearchNetwork(false)
-                        ->setTargetContentNetwork(false)
-                        ->setTargetPartnerSearchNetwork(false)
-                )
-        ));
+        $kampanya_islemi->setCampaignOperation(
+            (new CampaignOperation())->setCreate($yeniden_kampanya)
+        );
         $islemler[] = $kampanya_islemi;
 
 
@@ -1127,6 +1171,23 @@ function google_ads_kampanya_olustur(
                 )
         ));
         $islemler[] = $konum_islemi;
+
+        // PROMPT-21: hariç tutulan konumlar — hedef konum kriterinin yanına,
+        // aynı atomik mutate içinde, negative=true konum kriterleri olarak
+        // eklenir; ayrı bir mutate çağrısı yapılmaz.
+        foreach ($haric_konum_kaynaklari as $haric_kaynak) {
+            $haric_islemi = new MutateOperation();
+            $haric_islemi->setCampaignCriterionOperation((new CampaignCriterionOperation())->setCreate(
+                (new CampaignCriterion())
+                    ->setCampaign($on_ek . '/campaigns/-2')
+                    ->setNegative(true)
+                    ->setLocation(
+                        (new LocationInfo())
+                            ->setGeoTargetConstant($haric_kaynak)
+                    )
+            ));
+            $islemler[] = $haric_islemi;
+        }
 
         $dil_islemi = new MutateOperation();
         $dil_islemi->setCampaignCriterionOperation((new CampaignCriterionOperation())->setCreate(

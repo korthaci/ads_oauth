@@ -1,12 +1,14 @@
 <?php
 
 /**
- * PROMPT-20.3/20.4 sentetik testi: suggestGeoTargetConstants yanit isleme,
- * belirsiz konum hata mesaji ve TTPA zorunlu alan dogrulamasi.
+ * PROMPT-20.3/20.4/21 sentetik testi: suggestGeoTargetConstants yanit isleme,
+ * belirsiz konum aday listesi, secim kullanilabilirlik, yaklasik toplam butce
+ * bitis tarihi ve TTPA zorunlu alan dogrulamasi.
  *
  * Calistirma: php tests/konum-oneri-mesaj-testi.php
  * Google Ads API cagrisi yapmaz; sentetik SuggestGeoTargetConstantsResponse
- * nesneleriyle saf google_ads_konum_yanitini_isle() fonksiyonu test edilir.
+ * nesneleriyle saf fonksiyonlar test edilir; kaynak taramalariyla mutate akisi
+ * dogrulanir.
  */
 
 use Google\Ads\GoogleAds\V25\Resources\GeoTargetConstant;
@@ -116,10 +118,14 @@ $sonuc = google_ads_konum_yanitini_isle(
 );
 
 $beklenen = [
-    'resource_name' => 'geoTargetConstants/110419',
-    'name' => 'Ankara',
-    'target_type' => 'Province',
-    'canonical_name' => 'Ankara,Ankara,Turkey',
+    'durum' => 'tek',
+    'konum' => [
+        'resource_name' => 'geoTargetConstants/110419',
+        'name' => 'Ankara',
+        'target_type' => 'Province',
+        'canonical_name' => 'Ankara,Ankara,Turkey',
+    ],
+    'adaylar' => [],
 ];
 
 if ($sonuc !== $beklenen) {
@@ -147,53 +153,57 @@ $yakin_oneri = konum_onerisi_olustur(
         ->setCanonicalName('Ankaray,Turkey')
 );
 
-try {
-    google_ads_konum_yanitini_isle(
-        konum_yaniti_olustur([
-            konum_onerisi_olustur($sabit_il),
-            konum_onerisi_olustur($sabit_ilce),
-            $yakin_oneri,
-        ]),
-        'Ankara'
-    );
+// 2) PROMPT-21: belirsiz cok eslesme artik hata FIRLATMAZ; 'belirsiz' durumuyla
+//    adaylarin tam listesi doner. Tam eslesme olmayan oneri (Ankaray) listede
+//    yer almaz; secim kullanicidan istenir (sessiz best-match yok).
+$belirsiz_sonuc = google_ads_konum_yanitini_isle(
+    konum_yaniti_olustur([
+        konum_onerisi_olustur($sabit_il),
+        konum_onerisi_olustur($sabit_ilce),
+        $yakin_oneri,
+    ]),
+    'Ankara'
+);
 
-    fwrite(STDERR, "HATA (belirsiz cok eslesme): hata firlamadi.\n");
+if (
+    ($belirsiz_sonuc['durum'] ?? '') !== 'belirsiz'
+    || $belirsiz_sonuc['konum'] !== null
+) {
+    fwrite(STDERR, "HATA (belirsiz cok eslesme): durum 'belirsiz' ve konum null bekleniyordu.\n");
     exit(1);
-} catch (GoogleAdsKesifHatasi $hata) {
-    $mesaj = $hata->getMessage();
+}
 
-    foreach ([
-        'Aynı adlı birden fazla Google Ads konumu bulundu',
-        'Ankara (Province), Ankara (County)',
-        "'canonical_name'",
-        'Ankara,Ankara,Turkey',
-        'Ankara,Kızılcahamam,Turkey',
-    ] as $parca) {
-        if (mb_strpos($mesaj, $parca) === false) {
-            fwrite(STDERR, sprintf(
-                "HATA (belirsiz mesaj): mesaj '%s' icermiyor. Mesaj: %s\n",
-                $parca,
-                $mesaj
-            ));
-            exit(1);
-        }
-    }
+if (count($belirsiz_sonuc['adaylar']) !== 2) {
+    fwrite(STDERR, sprintf(
+        "HATA (belirsiz cok eslesme): 2 aday beklenirken %d geldi.\n",
+        count($belirsiz_sonuc['adaylar'])
+    ));
+    exit(1);
+}
 
-    if (mb_strpos($mesaj, 'Ankaray') !== false) {
+if (
+    $belirsiz_sonuc['adaylar'][0]['resource_name'] !== 'geoTargetConstants/110419'
+    || $belirsiz_sonuc['adaylar'][0]['target_type'] !== 'Province'
+    || $belirsiz_sonuc['adaylar'][0]['canonical_name'] !== 'Ankara,Ankara,Turkey'
+    || $belirsiz_sonuc['adaylar'][1]['resource_name'] !== 'geoTargetConstants/110421'
+    || $belirsiz_sonuc['adaylar'][1]['target_type'] !== 'County'
+    || $belirsiz_sonuc['adaylar'][1]['canonical_name'] !== 'Ankara,Kızılcahamam,Turkey'
+) {
+    fwrite(STDERR, "HATA (belirsiz cok eslesme): aday listesi beklenenden farkli.\n");
+    exit(1);
+}
+
+foreach ($belirsiz_sonuc['adaylar'] as $aday) {
+    if ($aday['name'] !== 'Ankara') {
         fwrite(STDERR, sprintf(
-            "HATA (belirsiz mesaj): tam eslesme olmayan aday listelendi. Mesaj: %s\n",
-            $mesaj
+            "HATA (belirsiz cok eslesme): tam eslesme olmayan aday listede: %s\n",
+            $aday['name']
         ));
         exit(1);
     }
-
-    if ($hata->kategori !== 'girdi') {
-        fwrite(STDERR, "HATA (belirsiz mesaj): kategori 'girdi' degil.\n");
-        exit(1);
-    }
-
-    $vaka_sayisi++;
 }
+
+$vaka_sayisi++;
 
 // 3) Belirsiz ama canonical_name bos: hedef turleri yine listelenir,
 //    canonical orneklemesi yerine genel yonlendirme verilir.
@@ -206,34 +216,35 @@ $kanoniksiz_ilce = (new GeoTargetConstant())
     ->setName('Ankara')
     ->setTargetType('County');
 
-try {
-    google_ads_konum_yanitini_isle(
-        konum_yaniti_olustur([
-            konum_onerisi_olustur($kanoniksiz_il),
-            konum_onerisi_olustur($kanoniksiz_ilce),
-        ]),
-        'Ankara'
-    );
+// 3) PROMPT-21: belirsiz ve canonical_name'siz adaylar — aday listesinde
+//    canonical_name bos string olarak döner; secim bilgisiyle kullaniciya
+//    gosterilir, sessiz best-match yapilmaz.
+$kanoniksiz_sonuc = google_ads_konum_yanitini_isle(
+    konum_yaniti_olustur([
+        konum_onerisi_olustur($kanoniksiz_il),
+        konum_onerisi_olustur($kanoniksiz_ilce),
+    ]),
+    'Ankara'
+);
 
-    fwrite(STDERR, "HATA (kanoniksiz belirsizlik): hata firlamadi.\n");
+if (
+    ($kanoniksiz_sonuc['durum'] ?? '') !== 'belirsiz'
+    || count($kanoniksiz_sonuc['adaylar']) !== 2
+    || $kanoniksiz_sonuc['adaylar'][0]['target_type'] !== 'Province'
+    || $kanoniksiz_sonuc['adaylar'][1]['target_type'] !== 'County'
+) {
+    fwrite(STDERR, "HATA (kanoniksiz belirsizlik): aday listesi beklenenden farkli.\n");
     exit(1);
-} catch (GoogleAdsKesifHatasi $hata) {
-    $mesaj = $hata->getMessage();
+}
 
-    if (
-        mb_strpos($mesaj, 'Ankara (Province), Ankara (County)') === false
-        || mb_strpos($mesaj, 'daha belirgin yazın') === false
-        || mb_strpos($mesaj, 'canonical_name') !== false
-    ) {
-        fwrite(STDERR, sprintf(
-            "HATA (kanoniksiz belirsizlik): mesaj bekleneni icermiyor: %s\n",
-            $mesaj
-        ));
+foreach ($kanoniksiz_sonuc['adaylar'] as $aday) {
+    if ($aday['canonical_name'] !== '') {
+        fwrite(STDERR, "HATA (kanoniksiz belirsizlik): canonical_name bos degil.\n");
         exit(1);
     }
-
-    $vaka_sayisi++;
 }
+
+$vaka_sayisi++;
 
 // 4) 6 adayli belirsizlik: mesaj en fazla 5 canonical ornegi listeler.
 $cok_aday = [];
@@ -248,38 +259,35 @@ for ($i = 1; $i <= 6; $i++) {
     );
 }
 
-try {
-    google_ads_konum_yanitini_isle(
-        konum_yaniti_olustur($cok_aday),
-        'Ankara'
-    );
+// 4) PROMPT-21: 6 adayli belirsizlik — aday listesi TAM olarak doner (eskiden
+//    hata mesaji 5 adayla sinirliydi; artik secim listesinin tamami gider).
+$cok_aday_sonuc = google_ads_konum_yanitini_isle(
+    konum_yaniti_olustur($cok_aday),
+    'Ankara'
+);
 
-    fwrite(STDERR, "HATA (6 aday): hata firlamadi.\n");
+if (
+    ($cok_aday_sonuc['durum'] ?? '') !== 'belirsiz'
+    || count($cok_aday_sonuc['adaylar']) !== 6
+) {
+    fwrite(STDERR, sprintf(
+        "HATA (6 aday): 'belirsiz' durum ve 6 aday beklenirken %d geldi.\n",
+        count($cok_aday_sonuc['adaylar'] ?? [])
+    ));
     exit(1);
-} catch (GoogleAdsKesifHatasi $hata) {
-    $mesaj = $hata->getMessage();
+}
 
-    foreach ([1, 2, 3, 4, 5] as $i) {
-        if (mb_strpos($mesaj, 'Ankara,Ilce' . $i . ',Turkey') === false) {
-            fwrite(STDERR, sprintf(
-                "HATA (6 aday): %d. aday mesajda yok. Mesaj: %s\n",
-                $i,
-                $mesaj
-            ));
-            exit(1);
-        }
-    }
-
-    if (mb_strpos($mesaj, 'Ankara,Ilce6,Turkey') !== false) {
+foreach ($cok_aday_sonuc['adaylar'] as $indeks => $aday) {
+    if ($aday['canonical_name'] !== 'Ankara,Ilce' . ($indeks + 1) . ',Turkey') {
         fwrite(STDERR, sprintf(
-            "HATA (6 aday): mesaj 5 adayla sinirli kalmadi: %s\n",
-            $mesaj
+            "HATA (6 aday): %d. aday canonical_name beklenenden farkli.\n",
+            $indeks + 1
         ));
         exit(1);
     }
-
-    $vaka_sayisi++;
 }
+
+$vaka_sayisi++;
 
 // 5) Tam eslesme yok ama oneriler var: ornek onerilerle hata (davranis korunur).
 $yakin_yanit = konum_yaniti_olustur([
@@ -395,13 +403,19 @@ foreach ([
     "setResourceName(\$on_ek . '/campaigns/-2')" => 1,
     "setResourceName(\$on_ek . '/adGroups/-3')" => 1,
     "'/campaignBudgets/-1'" => 2,
-    "'/campaigns/-2'" => 4,
+    "'/campaigns/-2'" => 5,
     "'/adGroups/-3'" => 3,
     "use Google\\Ads\\GoogleAds\\V25\\Enums\\EuPoliticalAdvertisingStatusEnum\\EuPoliticalAdvertisingStatus;" => 1,
     "EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING" => 1,
     "setContainsEuPoliticalAdvertising(" => 1,
     "\$sonuclar = \$yanit->getMutateOperationResponses();" => 1,
     "->getResults()" => 0,
+    '->setNegative(true)' => 1,
+    '->setEndDateTime(' => 1,
+    "'durum' => 'tek'" => 1,
+    "'durum' => 'belirsiz'" => 1,
+    'Hariç tutulan konum kaynak adı geçersiz.' => 1,
+    'Kampanya bitiş tarihi geçersiz (beklenen format: YYYY-MM-DD).' => 1,
 ] as $desen => $beklenen_adet) {
     $adet = substr_count($adapter_kod, $desen);
 
@@ -540,7 +554,134 @@ if (
 
 $vaka_sayisi++;
 
+// 12) PROMPT-21 GOREV-A: secim kullanilabilirlik kontrolu (saf fonksiyon).
+//     (c) gecerli kaynak + eslesen metin -> kullanilir; metin degistiyse,
+//     format bozuksa veya bos secimse suggest yeniden yapilir.
+if (kampanya_konum_secimi_kullanilabilir('geoTargetConstants/110419', 'Ankara', 'Ankara') !== true) {
+    fwrite(STDERR, "HATA (Gorev-A): gecerli secim kullanilabilir olmali.\n");
+    exit(1);
+}
+
+if (kampanya_konum_secimi_kullanilabilir('geoTargetConstants/110419', 'Ankara', 'İstanbul') !== false) {
+    fwrite(STDERR, "HATA (Gorev-A): konum metni degistiginde secim gecersiz olmali.\n");
+    exit(1);
+}
+
+if (kampanya_konum_secimi_kullanilabilir('geoTargetConstants/abc', 'Ankara', 'Ankara') !== false) {
+    fwrite(STDERR, "HATA (Gorev-A): gecersiz kaynak adli secim kabul edilmemeli.\n");
+    exit(1);
+}
+
+if (kampanya_konum_secimi_kullanilabilir('', 'Ankara', 'Ankara') !== false) {
+    fwrite(STDERR, "HATA (Gorev-A): bos secim kabul edilmemeli.\n");
+    exit(1);
+}
+
+$vaka_sayisi += 4;
+
+// 13) PROMPT-21 GOREV-C: yaklasik toplam butce -> bitis tarihi (saf fonksiyon).
+//     (e) toplam < gunluk -> dogrulama hatasi (sessizce yuvarlanmaz);
+//     (f) gunluk 100 TL, toplam 1000 TL -> 10 gun sonrasi.
+try {
+    kampanya_bitis_tarihi_hesapla('2026-09-20', 50_000_000, 100_000_000);
+
+    fwrite(STDERR, "HATA (Gorev-C): toplam < gunluk butce hatasiz kabul edildi.\n");
+    exit(1);
+} catch (InvalidArgumentException $hata) {
+    if (mb_strpos($hata->getMessage(), 'Toplam bütçe günlük bütçeden küçük olamaz') === false) {
+        fwrite(STDERR, sprintf(
+            "HATA (Gorev-C): beklenen mesaj gelmedi: %s\n",
+            $hata->getMessage()
+        ));
+        exit(1);
+    }
+}
+
+if (kampanya_bitis_tarihi_hesapla('2026-09-20', 1000_000_000, 100_000_000) !== '2026-09-30') {
+    fwrite(STDERR, "HATA (Gorev-C): 1000 TL / 100 TL icin 10 gun sonrasi bekleniyordu.\n");
+    exit(1);
+}
+
+if (kampanya_bitis_tarihi_hesapla('2026-09-20', 100_000_000, 100_000_000) !== '2026-09-21') {
+    fwrite(STDERR, "HATA (Gorev-C): esit butce icin 1 gun sonrasi bekleniyordu.\n");
+    exit(1);
+}
+
+if (kampanya_bitis_tarihi_hesapla('2026-09-20', 999_000_000, 100_000_000) !== '2026-09-29') {
+    fwrite(STDERR, "HATA (Gorev-C): floor(999/100)=9 gun sonrasi bekleniyordu.\n");
+    exit(1);
+}
+
+$vaka_sayisi += 4;
+
+// 14) PROMPT-21 kaynak taramasi: servis (konum secenekleri akisi, hariç
+//     konumlar, bitis tarihi) ve sihirbaz (yeni alanlar + secim arayuzu).
+$servis_kod = file_get_contents(__DIR__ . '/../php/servis/kampanya-servisi.php');
+$sihirbaz_kod = file_get_contents(__DIR__ . '/../tema/panel/kampanya-sihirbazi.php');
+
+if ($servis_kod === false || $sihirbaz_kod === false) {
+    fwrite(STDERR, "HATA (kaynak tarama): servis/sihirbaz dosyasi okunamadi.\n");
+    exit(1);
+}
+
+foreach ([
+    'function kampanya_konum_secimi_kullanilabilir' => 1,
+    'function kampanya_bitis_tarihi_hesapla' => 1,
+    'function kampanya_konum_secimi_istegi_dondur' => 1,
+    "'konum_secenekleri' =>" => 1,
+    "'konum_secenekleri_baglam' =>" => 1,
+    "'konum_secenekleri_metin' =>" => 1,
+    'hedef_konum_resource_name' => 1,
+    'haric_konum_resource_name' => 1,
+    'hedef_konum_kaynak_metin' => 1,
+    'haric_konum_kaynak_metin' => 1,
+    'Aynı konum hem hedef hem hariç tutulan olamaz' => 1,
+    "'haric_konum_kaynaklari' =>" => 1,
+    "'bitis_tarihi' =>" => 1,
+] as $desen => $beklenen_adet) {
+    $adet = substr_count($servis_kod, $desen);
+
+    if ($adet !== $beklenen_adet) {
+        fwrite(STDERR, sprintf(
+            "HATA (Gorev-A/B/C servis tarama): '%s' %d kez bulundu, %d bekleniyordu.\n",
+            $desen,
+            $adet,
+            $beklenen_adet
+        ));
+        exit(1);
+    }
+}
+
+$vaka_sayisi++;
+
+foreach ([
+    'name="haric_konumlar"' => 1,
+    'name="toplam_butce"' => 1,
+    'name="hedef_konum_resource_name"' => 2,
+    'name="hedef_konum_kaynak_metin"' => 2,
+    'name="haric_konum_resource_name"' => 2,
+    'name="haric_konum_kaynak_metin"' => 2,
+    'id="konum-secim"' => 1,
+    'konum_secenekleri' => 6,
+    'konum_secim' => 2,
+    'kesin bir toplam harcama garantisi değildir' => 1,
+] as $desen => $beklenen_adet) {
+    $adet = substr_count($sihirbaz_kod, $desen);
+
+    if ($adet !== $beklenen_adet) {
+        fwrite(STDERR, sprintf(
+            "HATA (Gorev-A/C sihirbaz tarama): '%s' %d kez bulundu, %d bekleniyordu.\n",
+            $desen,
+            $adet,
+            $beklenen_adet
+        ));
+        exit(1);
+    }
+}
+
+$vaka_sayisi++;
+
 printf(
-    "PROMPT-20.3/20.4 konum ve TTPA dogrulama testleri: PASS (%d vaka)\n",
+    "PROMPT-20.3/20.4/21 konum, TTPA ve yeni alan dogrulama testleri: PASS (%d vaka)\n",
     $vaka_sayisi
 );

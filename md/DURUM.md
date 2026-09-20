@@ -1280,3 +1280,147 @@ eklenen prompt dokümanıdır; bu oturumda untracked bırakıldı ve değiştiri
   olmalı, kullanıcıya gerçek kampanya ID'si ve `PAUSED` durumu net şekilde
   gösterilmelidir. Kampanya `PAUSED` bırakılır, `ENABLED` yapılmaz. Bir sonraki
   hata çıkarsa gerçek API yanıtından teşhis edilip AYRI promptta çözülür.
+
+## PROMPT-21 — Konum belirsizliği çözümü, hariç tutulan bölgeler, yaklaşık toplam bütçe (2026-09-20)
+
+### TODO
+
+- [x] Konum çözümleme fonksiyonu çoklu eşleşmede adayları döndürecek şekilde genişletildi
+- [x] api/kampanya-olustur.php konum_secenekleri yanıtını destekliyor (köprü zaten
+      `kampanya_olustur($_POST)` döndürüyor; `konum_secenekleri` yanıtı service'ten
+      otomatik geçiyor; dosyada değişiklik gerekmedi)
+- [x] Sihirbaz formu: belirsizlikte seçim ekranı + hedef_konum_resource_name akışı
+- [x] Hariç tutulan bölge(ler) alanı eklendi, aynı çözümleme mantığından geçiyor
+- [x] Hariç konum mutate'e negative=true kriteri olarak ekleniyor
+- [x] Hedef ile hariç konum çakışması reddediliyor
+- [x] Toplam bütçe alanı + end_date hesaplama birim testi geçti
+- [x] Toplam bütçe < günlük bütçe doğrulaması eklendi
+- [x] Sihirbazda toplam bütçe için uyarı metni eklendi
+- [x] php -l tüm dosyalarda geçti
+- [x] Deploy listesi verildi
+- [x] Kort için üç canlı test senaryosu (Ankara seçim, Trabzon hariç, toplam bütçe)
+      net yazıldı (aşağıda)
+- [x] DURUM.md güncellendi
+
+Tamamlanamayan madde yok.
+
+### Görev A — Konum belirsizliği: gerçek seçim arayüzü
+
+- `google_ads_konum_yanitini_isle()` ve `google_ads_konum_onerilerini_al()` dönüş
+  şekli genişletildi: `{'durum': 'tek'|'belirsiz', 'konum': ?kayit, 'adaylar': list}`.
+  Tek tam eşleşme → 'tek' (davranış korunur); 0 tam eşleşme → eskisi gibi
+  `GoogleAdsKesifHatasi` (bulunamadı / örnek önerilerle); **birden fazla tam eşleşme
+  artık exception FIRLATMAZ**, adayların tam listesi (resource_name, name,
+  target_type, canonical_name) çağıran koda döner.
+- Kullanıcının serbest metni (`"Ankara,Turkiye"` gibi) suggest `LocationNames`'e
+  geçerli bir arama terimi olmadığı için canonical_name ile çözüm mümkün değildi;
+  exception yolu kaldırıldı ve `google_ads_konum_belirsizlik_mesaji()` silindi
+  (artık hata mesajı üretilmiyor; adaylar UI'da radio listesiyle seçtirilir).
+- `php/servis/kampanya-servisi.php`: konum belirsizse mutate HİÇ denenmeden
+  `api/kampanya-olustur.php` üzerinden frontend'e şu yanıt döner:
+  `{'return': 0, 'mesaj': 'Konum belirsiz, lütfen birini seçin.', 'konum_secenekleri':
+  [{'resource_name', 'ad', 'tip', 'canonical_name'}...], 'konum_secenekleri_baglam':
+  'hedef'|'haric', 'konum_secenekleri_metin': ...}`.
+- `hedef_konum_resource_name` (+ tutarlılık için `hedef_konum_kaynak_metin`) gizli
+  alanları: kaynak ad doluysa, biçimi `geoTargetConstants/[0-9]+` ise ve seçimin
+  yapıldığı metin mevcut `hedef_konum` ile aynıysa suggest çağrısı ATLANIR ve
+  doğrudan bu kaynak ad kriter olarak kullanılır; metin değiştiyse seçim geçersiz
+  sayılıp suggest yeniden yapılır (`kampanya_konum_secimi_kullanilabilir()` saf
+  fonksiyonu, PROMPT-21 §1.1.4; sessiz best-match hâlâ yok).
+- Sihirbaz (`tema/panel/kampanya-sihirbazi.php`): `konum_secenekleri` içeren yanıtta
+  form sayfa yenilenmeden radio-listeli seçim kutusunu gösterir (`ad` + `tip` +
+  `canonical_name`); kullanıcı bir adayı işaretleyince ilgili gizli alan doldurulur
+  ve "Kampanyayı oluştur" ile form seçimle birlikte tekrar gönderilir. Konum metni
+  değişirse seçim temizlenir/kutusu gizlenir.
+
+### Görev B — Hariç tutulan bölge(ler)
+
+- Sihirbaza opsiyonel `haric_konumlar` textarea eklendi (virgül/satır ayrımı,
+  `kampanya_metnini_listeye_ayir()` ile bölünür; en fazla 20 adet, her biri en fazla
+  100 karakter).
+- Her hariç konum hedef konumla AYNI çözümleme mantığından geçer; birden fazla
+  belirsiz hariç konum girilirse İLK belirsiz olan için seçim istenir, o çözülünce
+  bir sonraki istekte gerekirse diğeri istenir (PROMPT-21 §2.2; her biri için
+  `haric_konum_resource_name` + `haric_konum_kaynak_metin` gizli alanları).
+- Çözümlenen her hariç konum, mutate isteğine ek `MutateOperation` +
+  `CampaignCriterionOperation.create` olarak `->setNegative(true)` ile eklenir
+  (hedef konum kriterinin yanında, aynı atomik mutate içinde; `partial_failure`
+  kapalı kalır, ayrı mutate çağrısı yapılmaz; PAUSED ve manager taze kontrolü
+  aynen korunur).
+- Hedef konumla aynı kaynak adına sahip hariç konum → anlamlı hata:
+  "Aynı konum hem hedef hem hariç tutulan olamaz: <metin>. Farklı bir hariç konum
+  yazın." Hariç listesinde aynı konumun tekrarı da anlamlı hata ile reddedilir
+  (sessizce yok sayılmaz).
+
+### Görev C — Yaklaşık toplam bütçe (bitiş tarihi ile)
+
+- Sihirbaza opsiyonel `toplam_butce` alanı + AÇIK uyarı metni eklendi: "Bu, kesin bir
+  toplam harcama garantisi değildir — Google bazı günlerde günlük bütçenin biraz
+  üzerinde harcayıp ayı ortalayabilir; bu alan yalnızca kampanyanın yaklaşık olarak
+  toplam bütçe / günlük bütçe gün sonra otomatik olarak durmasını sağlar (bitiş
+  tarihi atanır)."
+- `kampanya_bitis_tarihi_hesapla($bugun, $toplam_micros, $gunluk_micros)` saf
+  fonksiyonu: `bitis = bugun + floor(toplam/gunluk)` gün (intdiv, micros cinsinden
+  kesin; asgari 1 gün). `toplam < gunluk` ise InvalidArgumentException ("Toplam bütçe
+  günlük bütçeden küçük olamaz...") — sessizce 0/1 güne yuvarlanmaz; bu mesaj
+  kullanıcıya aynen döner. Toplam bütçe TL girdisi `kampanya_butcesini_microsa_cevir()`
+  ile çözümlenir (yeni opsiyonel `etiket` parametresi: 'Toplam bütçe'; mevcut günlük
+  bütçe davranışı ve 16/16 micros testi değişmedi).
+- **Vendor doğrulaması (tahmin yok):** V25 `Campaign` sınıfında `end_date` alanı YOK;
+  yalnızca `end_date_time` (`optional string end_date_time = 105;`,
+  `Campaign::setEndDateTime()` vendor satır 2058) var. Bu nedenle bitiş tarihi
+  `->setEndDateTime($bitis . ' 23:59:59')` olarak atanır (YYYY-MM-DD HH:MM:SS,
+  hesabın saat diliminde; 23:59:59 ile belirlenen günün sonuna kadar çalışır).
+  Alan doldurulmamışsa kampanya eskisi gibi bitiş tarihsiz (süresiz) oluşur.
+- `CampaignCriterion::setNegative()` (vendor satır 383) ve
+  `GeoTargetConstant::getCanonicalName()/getTargetType()/getName()` vendor'dan
+  teyit edildi.
+
+### Doğrulama (PROMPT-21)
+
+- `php -l`: `php/baglayici/google-ads-baglayici.php`, `php/servis/kampanya-servisi.php`,
+  `tema/panel/kampanya-sihirbazi.php`, `tests/konum-oneri-mesaj-testi.php` → PASS.
+- Sentetik test güncellendi/genişletildi: (a) tek eşleşme → 'tek' + kayıt; (b) çoklu
+  eşleşme → 'belirsiz' + tam aday listesi (exception yok; tam eşleşme olmayan aday
+  listede yer almaz; 6 adayın tamamı döner — eski 5 adaylık mesaj sınırı kaldırıldı);
+  (c) `kampanya_konum_secimi_kullanilabilir()` birim vakaları (geçerli seçim
+  kullanılır; metin değişirse / geçersiz biçim / boş → kullanılmaz); (d) çakışma ve
+  tekrar hata mesajları kaynak taramasıyla; (e) toplam < günlük →
+  InvalidArgumentException; (f) günlük 100 TL + toplam 1000 TL → 10 gün sonrası
+  (2026-09-20 → 2026-09-30), eşit → 1 gün, 999/100 → floor 9 gün.
+- Kaynak taramaları: adapter'da `->setNegative(true)` (1), `->setEndDateTime(` (1),
+  `'durum' => 'tek'`/`'belirsiz'` (1'er), hariç kaynak/bitiş tarihi doğrulama
+  mesajları; serviste yeni fonksiyonlar + `konum_secenekleri` yanıtı + gizli alan
+  okumaları; sihirbazda yeni alanlar + JS seçim akışı + uyarı metni.
+- Sonuç: sentetik test PASS (20 vaka), micros testi PASS (16 gecerli, 16 gecersiz),
+  `git diff --check` temiz.
+- Bu promptta gerçek mutate çağrısı YAPILMADI; tüm API doğrulamaları vendor kaynak
+  okumasından ve sentetik nesnelerden geldi.
+
+### Deploy listesi (PROMPT-21)
+
+1. `C:\server\htdocs\ads-oauth\php\baglayici\google-ads-baglayici.php`
+2. `C:\server\htdocs\ads-oauth\php\servis\kampanya-servisi.php`
+3. `C:\server\htdocs\ads-oauth\tema\panel\kampanya-sihirbazi.php`
+4. (değişmedi; köprü davranışı kod incelemesiyle onaylandı) `api/kampanya-olustur.php`
+5. (repo) `tests/konum-oneri-mesaj-testi.php`
+Not: `db/sema.sql` ve yerel `kampanyalar` kaydı değişmedi; yeni alanlar (hariç
+konumlar, toplam bütçe, konum seçimi) yerel tabloya yazılmaz.
+
+### KORT CANLI TEST senaryoları (hepsi PAUSED kalmalı, hiçbiri ENABLED yapılmamalı)
+
+1. **Ankara seçim:** Sihirbazda hedef konum "Ankara" girilip gönderildiğinde
+   `konum_secenekleri` radio listesi (örn. Province/City adayları) çıkmalı; kullanıcı
+   bir aday seçip tekrar gönderdiğinde kampanya seçilen konumla oluşmalı ve kullanıcıya
+   gerçek kampanya ID'si + PAUSED durumu gösterilmeli. Artık "Ankara,Turkiye" gibi
+   canonical_name yazması istenmemektedir; seçim ekranı gerçek mekanizmadır.
+2. **Türkiye + Trabzon hariç:** Hedef "Türkiye", hariç "Trabzon" ile test kampanyası;
+   mutasyon tek istekte başarılı olmalı; Google Ads arayüzünde kampanyanın konum
+   ayarında Trabzon'un "Hariç tutulan konumlar" altında göründüğü teyit edilmeli.
+   "Trabzon" belirsiz çıkarsa seçim ekranı aynı akışla Trabzon için de sorulur.
+3. **Toplam bütçe:** Günlük 100 TL + toplam 1000 TL gibi değerlerle oluşturulan test
+   kampanyasının Google Ads arayüzünde Bitiş tarihinin bugün+10 gün olduğu teyit
+   edilmeli; arayüzdeki uyarı metni ("kesin harcama garantisi değildir") kullanıcıya
+   göründüğü gibi kontrol edilmeli.
+4. Üç senaryoda da PAUSED korunur; ENABLED denemesi yapılmaz. Herhangi bir hata
+   çıkarsa gerçek API yanıtından teşhis edilip AYRI promptta çözülür.
