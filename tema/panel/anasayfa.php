@@ -39,6 +39,7 @@ require __DIR__ . '/../layout/header.php';
     <p>
         <button type="button" class="google-oauth-baslat-dugmesi">Google Ads hesabını bağla</button>
     </p>
+    <p id="google-oauth-mesaj" role="status" aria-live="polite"></p>
 <?php endif; ?>
 
 <script>
