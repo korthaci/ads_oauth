@@ -94,7 +94,8 @@ function kullanici_oturum_ac(int $sahip_no): void
 }
 
 /**
- * Yeni site sahibi kaydeder ve kayit basarisinda otomatik login yapar.
+ * Yeni site sahibi kaydeder. Yeni hesaplar veritabani DEFAULT 0 nedeniyle
+ * pasif baslar; onaylanana kadar otomatik login yapilmaz.
  *
  * @param array<string, mixed> $veriler
  * @return array{return: int, mesaj: string}
@@ -152,12 +153,9 @@ function kullanici_kayit(array $veriler): array
         throw $hata;
     }
 
-    $sahip_no = (int) $baglanti->lastInsertId();
-    kullanici_oturum_ac($sahip_no);
-
     return [
         'return' => 1,
-        'mesaj' => 'Kayıt başarılı.',
+        'mesaj' => 'Kaydınız alındı. Hesabınız onaylandıktan sonra giriş yapabilirsiniz.',
     ];
 }
 
@@ -183,18 +181,25 @@ function kullanici_giris(array $veriler): array
 
     $baglanti = veritabani_baglan();
     $sec = $baglanti->prepare(
-        'SELECT `no`, `sifre` FROM `site_sahipleri` WHERE `eposta` = :eposta LIMIT 1'
+        'SELECT `no`, `sifre`, `active` FROM `site_sahipleri` WHERE `eposta` = :eposta LIMIT 1'
     );
     $sec->execute(['eposta' => $eposta]);
     $kullanici = $sec->fetch();
 
     if (!is_array($kullanici)
-        || !isset($kullanici['no'], $kullanici['sifre'])
+        || !isset($kullanici['no'], $kullanici['sifre'], $kullanici['active'])
         || !is_string($kullanici['sifre'])
         || !password_verify($sifre, $kullanici['sifre'])) {
         return [
             'return' => 0,
             'mesaj' => 'E-posta veya şifre hatalı.',
+        ];
+    }
+
+    if ((int) $kullanici['active'] !== 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Hesabınız henüz onaylanmadı.',
         ];
     }
 

@@ -6,6 +6,7 @@ CREATE TABLE `site_sahipleri` (
   `eposta` varchar(255) NOT NULL,
   `sifre` varchar(255) NOT NULL,
   `ad_soyad` varchar(255) DEFAULT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 0,
   `kayit_tarihi` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`no`),
   UNIQUE KEY `eposta` (`eposta`)

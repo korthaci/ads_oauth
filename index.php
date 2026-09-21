@@ -29,14 +29,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     try {
         if ($form_islem === 'kayit') {
-            // PROMPT-22 Görev B: Public kayıt kapalıdır (ARCHITECTURE.md §1:
-            // "Kayıt herkese açık değildir; yeni kullanıcı erişimi
-            // manuel/davet yoluyla verilir"). Yeni hesap yalnızca sunucuda
-            // bin/kullanici-olustur.php (CLI) ile oluşturulur.
-            $cevap = [
-                'return' => 0,
-                'mesaj' => 'Kayıt şu anda davetle sınırlıdır.',
-            ];
+            $cevap = kullanici_kayit($_POST);
         } elseif ($form_islem === 'giris') {
             teshis_logla('index-post-giris-denemesi');
             $cevap = kullanici_giris($_POST);
@@ -53,7 +46,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             'sahip_no' => (string) (oturum_sahip_no() ?? 'null'),
         ]);
 
-        if (($cevap['return'] ?? 0) === 1) {
+        // Kayıt başarılı olsa da active=0 olduğu için oturum açılmaz. Onay
+        // bekleme mesajını aynı sayfada göstermek üzere redirect edilmez.
+        if (($cevap['return'] ?? 0) === 1 && $form_islem !== 'kayit') {
             header('Location: index.php');
             exit;
         }

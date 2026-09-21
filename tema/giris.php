@@ -1,9 +1,9 @@
 <?php
-$sayfa_basligi = 'Giriş - ads_oauth';
+$sayfa_basligi = 'Giriş / Kayıt - ads_oauth';
 require __DIR__ . '/layout/header.php';
 ?>
 <h1>ads_oauth</h1>
-<p>Google Ads hesabınızı bağlamak için giriş yapın.</p>
+<p>Google Ads hesabınızı bağlamak için giriş yapın veya yeni hesap oluşturun.</p>
 
 <?php if ($mesaj !== ''): ?>
     <p role="alert"><?= htmlspecialchars($mesaj, ENT_QUOTES, 'UTF-8') ?></p>
@@ -25,5 +25,23 @@ require __DIR__ . '/layout/header.php';
     </form>
 </section>
 
-<p>Kayıt davetle sınırlıdır; hesabınız için yöneticiyle iletişime geçin.</p>
+<section aria-labelledby="kayit-baslik">
+    <h2 id="kayit-baslik">Kayıt</h2>
+    <form method="post" action="index.php">
+        <input type="hidden" name="form_islem" value="kayit">
+        <p>
+            <label for="kayit-ad-soyad">Ad Soyad</label><br>
+            <input id="kayit-ad-soyad" name="ad_soyad" type="text" autocomplete="name" required>
+        </p>
+        <p>
+            <label for="kayit-eposta">E-posta</label><br>
+            <input id="kayit-eposta" name="eposta" type="email" autocomplete="email" required>
+        </p>
+        <p>
+            <label for="kayit-sifre">Şifre</label><br>
+            <input id="kayit-sifre" name="sifre" type="password" autocomplete="new-password" required>
+        </p>
+        <button type="submit">Kayıt</button>
+    </form>
+</section>
 <?php require __DIR__ . '/layout/footer.php'; ?>

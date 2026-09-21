@@ -1499,11 +1499,11 @@ eklendi (oturum başlamadan, POST işlenmeden önce). Bu düzeltme kalıcıdır.
   karakterlik sid hash'i yazılır. Yerel doğrulama örnek satırları:
   `2026-09-20 16:34:32 | oturum-ac | sahip_no=7 | eski_sid=ae676fe9 | yeni_sid=18470d29`
   `2026-09-20 16:34:59 | index-giris | method=POST | sahip_no=null | sid=bc15b954`
-  `2026-09-20 16:34:59 | index-post-sonuc | form_islem=kayit | return=0 | sahip_no=null`
+  `2026-09-20 16:34:59 | index-post-sonuc | form_islem=kayit | return=1 | sahip_no=null`
 
 **KORT CANLI TEST 1 (izolasyon):** Daha önceki senaryoyu FİREFOX'ta tekrarla:
-yeni kayıt denemesi artık reddedilir (aşağıda) → **kendi hesabınla GİRİŞ yap**
-(veya sana CLI ile yeni hesap açılır) → ana sayfayı aç. Ardından log dosyasını
+public kayıt formundan yeni hesap oluştur, veritabanında hesabı `active=1` yap,
+ardından **kendi hesabınla GİRİŞ yap** → ana sayfayı aç. Ardından log dosyasını
 paylaş. Log'ta beklenenler: yeni kayıt/girişte `oturum-ac` satırında YENİ
 `yeni_sid` + doğru `sahip_no`; `panel-sorgu` satırında `param_sahip_no` ile
 `donen_harici_kimlik` ÜSTÜSTE DÜŞMELİ. Eğer tarayıcıda yanlış (eski) hesap
@@ -1513,38 +1513,17 @@ geçiyorsa → kod hatası var, kök neden tekrar incelenir. Eğer her şey doğ
 → önceki gözlem insan hatasıydı (Firefox autofill ile eski hesaba girilmiş
 olması en olası); bu DURUM'a açıkça işlenir.
 
-### Görev B — Kayıt güvenliği kilidi (TAMAMLANDI)
+### Görev B — Kayıt güvenliği kilidi (PROMPT-23.9 ile geri alındı)
 
-1. `index.php` `form_islem === 'kayit'` dalı artık hesap OLUŞTURMAZ;
-   `return: 0` + mesaj `"Kayıt şu anda davetle sınırlıdır."` döner.
-   (`kullanici_kayit()` fonksiyonu değişmedi; web akışından artık çağrılmaz.)
-2. `tema/giris.php`: Kayıt formu/bölümü kaldırıldı; sayfa başlığı
-   "Giriş - ads_oauth"; altına "Kayıt davetle sınırlıdır" notu eklendi.
-   Yerel render testi: alert mesajı göründü, giriş formu duruyor, kayıt
-   formu yok, `site_sahipleri` satır sayısı DEĞİŞMEDİ (geçici test: exit 0).
-3. Yeni `bin/kullanici-olustur.php` (yalnızca CLI): `kullanici_kayit()`'ı
-   çağırır (doğrulama + hash mantığı kopyalanmaz), argüman hatası → kullanım
-   mesajı, başarısızlık → mesaj + exit 1. HTTP erişimine karşı ÇİFT KATMAN:
-   `PHP_SAPI !== 'cli'` → 403; `.htaccess`'e `RewriteRule ^bin/ - [F,L]`
-   eklendi. Yerel test: gerçek kullanıcı oluşturuldu ("Site sahibi
-   oluşturuldu: prompt22-…@example.invalid", exit 0; DB'de doğrulandı), test
-   sonrasında satır temizlendi (DELETE rowCount=1).
-   **Kort için örnek komut (sunucuda, proje kökünde):**
-   `php bin/kullanici-olustur.php kisi@ornek.com 'GucluBirSifre123' "Ayşe Yılmaz"`
-   (Not: şifre shell geçmişine düşebilir; gerekirse geçmişi temizle.)
-4. DB şeması değişmedi; davet-kodu mekanizması eklenmedi (ARCHITECTURE.md §1
-   "manuel" tanımı bu yaklaşımla karşılanıyor).
+PROMPT-22'nin public kayıt kapatma, CLI kullanıcı oluşturma ve `bin/` engelleme
+yaklaşımı PROMPT-23.9 kapsamında kaldırıldı. PROMPT-22'nin açık kalan izolasyon
+teşhisi ve geçici `php/teshis-log.php` konusu ise aşağıdaki notlarla hâlâ ayrıdır.
 
-`php -l`: index.php, tema/giris.php, bin/kullanici-olustur.php,
-php/teshis-log.php, php/servis/kullanici-servisi.php,
-php/servis/hesap-servisi.php — HEPSİ temiz.
-
-**KORT CANLI TEST 2 (kayıt kilidi):** `https://n0n1.tr/ads-oauth/` üzerinde
-(form POST ile) `form_islem=kayit` gönderildiğinde artık
-"Kayıt şu anda davetle sınırlıdır." mesajı dönmeli ve hesap oluşmamalı;
-giriş ekranında kayıt formu görünmemeli. Deploy sonrası NO-STORE header'ın
-gerçekten ulaştığını da teyit et (DevTools → Network → index.php yanıt
-başlıkları: `Cache-Control: no-store, private`).
+**KORT CANLI TEST 2 (izolasyon + cache):** `https://n0n1.tr/ads-oauth/` üzerinde
+PROMPT-22 senaryosunu Firefox'ta tekrarla: yeni kullanıcı akışında önce hesabın
+`active=1` ile onaylandığından emin ol, giriş yap, ana sayfayı aç ve teşhis logunu
+incele. `Cache-Control: no-store, private` header'ının DevTools → Network →
+`index.php` yanıtında ulaştığını da teyit et.
 
 ## PROMPT-23 — Yayına al/duraklat, kampanya listesi ve panel UX (tamamlandı)
 
@@ -1574,3 +1553,70 @@ Deploy sonrası Kort kontrolü: `Cache-Control: no-store` header'ı, yeni kampan
 5. Testi gerçek düşük bütçeli kampanyayla, kısa süreyle yapın; eski yanlış dil sabitli kampanyalar otomatik değiştirilmez.
 
 Geçici vendor doğrulama ve sentetik test dosyaları final doğrulama sonrasında çalışma ağacından kaldırılmıştır; canlı doğrulama Kort'a bağlıdır.
+
+## PROMPT-23.9 — Public kayıt + manuel `active` onayı (tamamlandı)
+
+### ÖNCELİKLİ: production migration sonrası Kort hesabını etkinleştir
+
+`db/sema.sql` içine yeni kolon eklenmiştir. Production veritabanında
+phpMyAdmin üzerinden aşağıdaki SQL henüz çalıştırılmadıysa çalıştır:
+
+```sql
+ALTER TABLE `site_sahipleri`
+    ADD COLUMN `active` TINYINT(1) NOT NULL DEFAULT 0 AFTER `ad_soyad`;
+```
+
+Migration mevcut kullanıcı satırlarını da `active = 0` yapar. Bu nedenle Kort,
+başka bir işlemden önce **kendi hesabını** ve kullanmaya devam edeceği gerçek
+hesapları `active = 1` yapmalıdır; aksi halde kendi hesabıyla giriş yapamaz:
+
+```sql
+UPDATE `site_sahipleri`
+SET `active` = 1
+WHERE `eposta` = 'KORTUN_GERCEK_EPOSTA_ADRESI';
+```
+
+`KORTUN_GERCEK_EPOSTA_ADRESI` yer tutucusunu gerçek e-posta ile değiştirin.
+
+### Uygulanan değişiklikler
+
+- `bin/kullanici-olustur.php` kaldırıldı; boş `bin/` dizini de kaldırıldı.
+- `.htaccess` içindeki artık gereksiz `bin/` engelleme kuralı kaldırıldı.
+- `db/sema.sql` içindeki `site_sahipleri` tanımına `ad_soyad` sonrasında şu
+  kolon eklendi: `` `active` TINYINT(1) NOT NULL DEFAULT 0 ``.
+- `tema/giris.php` public kayıt formuyla birlikte geri getirildi.
+- `index.php`, `form_islem=kayit` isteğini tekrar `kullanici_kayit($_POST)`
+  servisine gönderiyor. Kayıt başarılı olduğunda `return: 1` korunuyor; ancak
+  kayıt işleminde redirect yapılmıyor, böylece onay bekleme mesajı aynı sayfada
+  gösteriliyor ve otomatik oturum açılmıyor.
+- `kullanici_kayit()` INSERT sorgusuna `active` eklemiyor; DB `DEFAULT 0` ile
+  yeni hesabı pasif oluşturuyor. `kullanici_oturum_ac()` kayıt sonrasından
+  kaldırıldı. Başarı mesajı: `Kaydınız alındı. Hesabınız onaylandıktan sonra
+  giriş yapabilirsiniz.`
+- `kullanici_giris()` sorguya `active` alanını ekliyor. E-posta/şifre doğru
+  doğrulandıktan sonra `active != 1` ise giriş reddediliyor ve
+  `Hesabınız henüz onaylanmadı.` mesajı dönüyor.
+
+Pasif hesap mesajı, yanlış e-posta/şifre mesajından farklıdır; ancak yalnızca
+şifre `password_verify()` ile doğru doğrulandıktan sonra üretildiği için yanlış
+şifreyle hesap varlığı ifşa edilmez. Şifre hashleme ve doğrulama mantığı
+değiştirilmemiştir.
+
+### Deploy listesi
+
+- `.htaccess`
+- `db/sema.sql`
+- `index.php`
+- `php/servis/kullanici-servisi.php`
+- `tema/giris.php`
+- `md/ARCHITECTURE.md`
+- `md/DURUM.md`
+
+### PROMPT-22 açık notu
+
+PROMPT-22'nin geçici `php/teshis-log.php` dosyası ve çoklu kullanıcı izolasyonu
+canlı testi bu promptun konusu değildir ve kaldırılmamıştır. Deploy sonrası,
+Kort yeni bir hesabı `active=1` ile onaylayıp giriş yaparak Firefox izolasyon
+senaryosunu tekrarlamalı; logdaki `sahip_no`, session yenileme ve panel sorgusu
+değerlerini kontrol etmeli, ayrıca `index.php` yanıtında
+`Cache-Control: no-store, private` header'ını doğrulamalıdır.

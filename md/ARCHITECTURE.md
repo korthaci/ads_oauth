@@ -13,9 +13,10 @@ temel bilgileri girer (web sitesi, bütçe, hedef kitle), sistem arka planda kam
 API üzerinden otomatik yapar ve durumu/metrikleri basit bir panelde gösterir.
 
 Bu sistem yalnızca proje sahibi ve onun kişisel olarak yetkilendirdiği az sayıda (1-2) kişi
-tarafından kullanılacaktır. Kayıt herkese açık değildir; yeni kullanıcı erişimi manuel/davet
-yoluyla verilir. Sistem geniş ölçekli, bilinmeyen kullanıcı kitlesine hizmet veren bir SaaS
-ürünü DEĞİLDİR.
+tarafından kullanılacaktır. Kayıt formu herkese açık olsa da yeni hesabın kullanılabilir
+erişimi varsayılan olarak pasiftir; proje sahibi veritabanında manuel onay vererek erişimi
+açar. Böylece yeni kullanıcı erişimi hâlâ manuel/davet yoluyla verilir. Sistem geniş
+ölçekli, bilinmeyen kullanıcı kitlesine hizmet veren bir SaaS ürünü DEĞİLDİR.
 
 **Bu sistem değildir:**
 - Bir reklam ajansı aracı değildir (kullanıcı adına para akışına dahil olunmaz).
