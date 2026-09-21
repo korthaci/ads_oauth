@@ -41,15 +41,13 @@ require __DIR__ . '/../layout/header.php';
     <p>
         <label for="web_sitesi">Web sitesi (reklamın yönlendireceği adres)</label><br>
         <input type="text" id="web_sitesi" name="web_sitesi" required autocomplete="off"
-        value="https://n0n1.tr"
                placeholder="ornek.com (https:// otomatik eklenir)">
-        <small class="hint">Reklam tıklanınca ziyaretçinin gideceği adres; https:// eksikse otomatik eklenir.</small>
+        <small class="hint">Reklam tıklanınca ziyaretçinin gideceği adres; https:// eksikse otomatik eklenir. Örnek : n0n1.tr</small>
     </p>
     <p>
         <label for="kampanya_adi">Kampanya / iş adı</label><br>
-        <input type="text" id="kampanya_adi" name="kampanya_adi" required maxlength="255"
-        value="n0n1-ads-kampanya-test-2"/>
-        <small class="hint">Kampanyayı listede kolayca tanıyacağınız isim.</small>
+        <input type="text" id="kampanya_adi" name="kampanya_adi" required maxlength="255" />
+        <small class="hint">Kampanyayı listede kolayca tanıyacağınız isim. Herhangi bir şey olabilir.  Örnek : n0n1-ads-kampanya-test-2</small>
     </p>
     <p>
         <label for="basliklar">Reklam başlıkları (en az 3, en fazla 15; her biri en fazla 30 karakter)</label><br>
@@ -85,12 +83,12 @@ Bu reklam açıklaması test için yapılmıştır 2
     <p>
         <label for="gunluk_butce">Günlük bütçe (TL)</label><br>
         <input type="text" id="gunluk_butce" name="gunluk_butce" required
-               inputmode="decimal" placeholder="500" value="500">
+               inputmode="decimal" placeholder="500">
         <small class="hint">Google'ın günlük ortalamada hedefleyeceği tutardır; bazı günler biraz daha fazla harcayabilir.</small>
     </p>
     <p>
         <label for="hedef_konum">Hedef konum (şehir / bölge / ülke)</label><br>
-        <input type="text" id="hedef_konum" name="hedef_konum" required placeholder="Ankara" value="Ankara">
+        <input type="text" id="hedef_konum" name="hedef_konum" required placeholder="Ankara" value="">
         <small class="hint">Reklamın gösterileceği şehir, bölge veya ülke; birden fazla eşleşmede seçim yapmanız istenir.</small>
     </p>
     <p>
