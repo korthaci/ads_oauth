@@ -913,13 +913,21 @@ function google_ads_kampanya_durumunu_degistir(
     $client = google_ads_client_olustur($refresh_token, (int) $customer_id);
 
     try {
-        $kampanya = (new Campaign())
-            ->setResourceName('customers/' . $customer_id . '/campaigns/' . $kampanya_id)
-            ->setStatus(CampaignStatus::value($hedef_durum));
+        $kaynak = 'customers/' . $customer_id . '/campaigns/' . $kampanya_id;
 
-        $islem = (new CampaignOperation())
-            ->setUpdate($kampanya)
-            ->setUpdateMask(FieldMasks::allSetFieldsOf($kampanya));
+        if ($hedef_durum === 'REMOVED') {
+            // REMOVED, Campaign.status alanina yazilamaz; CampaignService.remove
+            // yalnizca kampanya resource name'i alan ayri bir operation'dir.
+            $islem = (new CampaignOperation())->setRemove($kaynak);
+        } else {
+            $kampanya = (new Campaign())
+                ->setResourceName($kaynak)
+                ->setStatus(CampaignStatus::value($hedef_durum));
+
+            $islem = (new CampaignOperation())
+                ->setUpdate($kampanya)
+                ->setUpdateMask(FieldMasks::allSetFieldsOf($kampanya));
+        }
 
         $yanit = $client->getCampaignServiceClient()->mutateCampaigns(
             MutateCampaignsRequest::build($customer_id, [$islem])
@@ -935,9 +943,9 @@ function google_ads_kampanya_durumunu_degistir(
             );
         }
 
-        $kaynak = trim((string) $sonuclar[0]->getResourceName());
+        $yanit_kaynagi = trim((string) $sonuclar[0]->getResourceName());
 
-        if (preg_match('/customers\/[0-9]+\/campaigns\/[0-9]+$/', $kaynak) !== 1) {
+        if (preg_match('/customers\/[0-9]+\/campaigns\/[0-9]+$/', $yanit_kaynagi) !== 1) {
             throw new GoogleAdsKesifHatasi(
                 'Google Ads beklenmeyen bir sonuç kaynağı döndürdü; durum değiştirme doğrulanamadı.',
                 'api'
@@ -946,7 +954,7 @@ function google_ads_kampanya_durumunu_degistir(
 
         $beklenen_kaynak = 'customers/' . $customer_id . '/campaigns/' . $kampanya_id;
 
-        if ($kaynak !== $beklenen_kaynak) {
+        if ($yanit_kaynagi !== $beklenen_kaynak) {
             throw new GoogleAdsKesifHatasi(
                 'Google Ads beklenmeyen bir sonuç kaynağı döndürdü; durum değiştirme doğrulanamadı.',
                 'api'
@@ -955,13 +963,16 @@ function google_ads_kampanya_durumunu_degistir(
 
 
         return [
-            'kampanya_kaynagi' => $kaynak,
-            'kampanya_id' => (string) substr($kaynak, (int) strrpos($kaynak, '/') + 1),
+            'kampanya_kaynagi' => $yanit_kaynagi,
+            'kampanya_id' => (string) substr($yanit_kaynagi, (int) strrpos($yanit_kaynagi, '/') + 1),
         ];
     } catch (GoogleAdsKesifHatasi $hata) {
         throw $hata;
     } catch (Throwable $hata) {
-        google_ads_hata_kaydi_yaz('CampaignService::mutateCampaigns status', $hata);
+        google_ads_hata_kaydi_yaz(
+            'CampaignService::mutateCampaigns ' . ($hedef_durum === 'REMOVED' ? 'remove' : 'status'),
+            $hata
+        );
         $kategori = google_ads_hata_kategorisi($hata);
 
         throw new GoogleAdsKesifHatasi(

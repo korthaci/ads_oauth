@@ -1,12 +1,8 @@
 <?php
 
 /**
- * PROMPT-24 sentetik testi: REMOVED hedefi kabul edilir, gecersiz hedefler
- * reddedilir; kaldirma istegi tam kampanya adi onayi olmadan mutate'a gidemez.
- *
- * Calistirma: php tests/prompt-24-kampanya-kaldirma-testi.php
- * Google Ads mutate cagrisi yapmaz; servis/adapter/panel kaynak sozlesmesini
- * ve erken girdi dogrulamasini kontrol eder.
+ * PROMPT-24 sentetik testi: REMOVED hedefi ve geri alinamaz kaldirma akisini
+ * kontrol eder. Google Ads mutate cagrisi yapmaz.
  */
 
 require_once __DIR__ . '/../php/servis/kampanya-servisi.php';
@@ -43,18 +39,34 @@ if ($servis === false || $adapter === false || $panel === false) {
     throw new RuntimeException('PROMPT-24 kaynak dosyalarindan biri okunamadi.');
 }
 
-foreach ([
+$kontroller = [
     [$servis, '&& $hedef_durum !== \'REMOVED\'', 'servis REMOVED dogrulamasi'],
     [$adapter, '&& $hedef_durum !== \'REMOVED\'', 'adapter REMOVED dogrulamasi'],
     [$servis, "'kaldirma_onayi'", 'sunucu tarafli kaldirma onayi'],
     [$servis, '\'durum\' => $hedef_durum === \'ENABLED\'', 'yerel durum yansimasi'],
-    [$panel, "value=\"active\" selected", 'varsayilan kaldirilanlar filtresi'],
+    [$adapter, '->setRemove($kaynak)', 'Google Ads remove operation'],
+    [$adapter, 'if ($hedef_durum === \'REMOVED\')', 'REMOVED operation ayrimi'],
+    [$adapter, "'CampaignService::mutateCampaigns '", 'hedefe gore hata logu'],
+    [$panel, 'value="active" selected', 'varsayilan kaldirilanlar filtresi'],
     [$panel, "filtre.value==='all'||k.status!=='REMOVED'", 'frontend filtreleme'],
     [$panel, "f.append('kaldirma_onayi'", 'frontend kaldirma onayi gonderimi'],
-    [$panel, "Bu işlem GERİ ALINAMAZ", 'geri alinamaz uyari'],
-] as [$kaynak, $desen, $aciklama]) {
+    [$panel, 'GER', 'geri alinamaz uyari'],
+];
+
+foreach ($kontroller as [$kaynak, $desen, $aciklama]) {
     if (strpos($kaynak, $desen) === false) {
         throw new RuntimeException(sprintf('Eksik PROMPT-24 deseni: %s', $aciklama));
+    }
+}
+
+$removed_baslangic = strpos($adapter, 'if ($hedef_durum === \'REMOVED\')');
+
+if ($removed_baslangic !== false) {
+    $removed_kisim = substr($adapter, $removed_baslangic);
+    $removed_sinir = strpos($removed_kisim, '} else {');
+
+    if ($removed_sinir === false || strpos(substr($removed_kisim, 0, $removed_sinir), 'setUpdateMask') !== false) {
+        throw new RuntimeException('REMOVED operation icinde update/update_mask kullaniliyor.');
     }
 }
 

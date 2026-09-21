@@ -1565,6 +1565,10 @@ Geçici vendor doğrulama ve sentetik test dosyaları final doğrulama sonrasın
 - [x] `REMOVED` isteği, servis katmanında kampanya adının `kaldirma_onayi` alanında tam
   eşleşmesini zorunlu kılıyor. Tam ad gelmezse Google mutate hiç çağrılmıyor. Böylece
   onay yalnızca frontend'e bırakılmadı; diğer hedef durumların akışı değiştirilmedi.
+- [x] Google Ads API'de `REMOVED`, Campaign `status` alanına update olarak değil,
+  `CampaignOperation.remove` ile gönderiliyor. Remove operation yalnızca
+  `customers/{customer_id}/campaigns/{campaign_id}` kaynak adını taşıyor; mevcut
+  `ENABLED`/`PAUSED` status update ve update mask akışı korunuyor.
 - [x] `tema/panel/kampanyalarim.php` içinde `REMOVED` olmayan her satıra **Kaldır**
   butonu eklendi. Onay kutusu kampanya adının eksiksiz yazılmasını ister ve açıkça
   **"Bu işlem GERİ ALINAMAZ. Kampanya kalıcı olarak kaldırılacak."** uyarısını gösterir.
