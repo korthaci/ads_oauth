@@ -3,6 +3,10 @@ RewriteEngine On
 RewriteBase /ads-oauth/
 ErrorDocument 404 /ads-oauth/404.html
 
+<FilesMatch "\.(env|ini|log|conf|sql|bak|sh|yaml|yml)$">
+    Require all denied
+</FilesMatch>
+
 RewriteRule ^\.well-known/acme-challenge - [L]
 RewriteRule "(^|/)\." - [F]
 

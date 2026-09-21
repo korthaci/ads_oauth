@@ -10,6 +10,31 @@ require __DIR__ . '/../layout/header.php';
     olarak oluşturulur; ayrı bir onay adımı yapılmadan yayına alınmaz.
 </p>
 
+<section id="ads-ai-yardimci" style="border: 1px solid #c8c8c8; padding: 14px; margin: 16px 0;">
+    <h2>Ads AI yardımcısı</h2>
+    <p>Ne reklamı vermek istediğinizi yazın. AI yalnızca öneri üretir; kampanya oluşturmaz veya yayınlamaz.</p>
+    <p>
+        <label for="ai-brief">AI'ya ne yapmak istediğinizi yazın</label><br>
+        <textarea id="ai-brief" rows="4" maxlength="4000"
+                  placeholder="Trabzon'da web tasarım hizmetim için yeni müşteri bulmak istiyorum."></textarea>
+    </p>
+    <p>
+        <button type="button" id="ai-oneri-olustur">Öneri oluştur</button>
+    </p>
+    <p id="ai-mesaj" role="status" aria-live="polite"></p>
+    <div id="ai-oneri-sonucu" hidden>
+        <h3>Öneriler</h3>
+        <p><strong>Kampanya adı:</strong> <span id="ai-kampanya-adi"></span></p>
+        <p><strong>Kampanya amacı:</strong> <span id="ai-kampanya-amaci"></span></p>
+        <p><strong>Hedef bölge:</strong> <span id="ai-hedef-konum"></span></p>
+        <div id="ai-oneri-listeleri"></div>
+        <small>Negatif anahtar kelimeler öneri olarak gösterilir; mevcut formda bu alan bulunmadığı için otomatik uygulanmaz.</small>
+        <p>
+            <button type="button" id="ai-onerileri-uygula">Önerileri forma uygula</button>
+        </p>
+    </div>
+</section>
+
 <form id="kampanya-sihirbazi-form">
     <p>
         <label for="web_sitesi">Web sitesi (reklamın yönlendireceği adres)</label><br>
@@ -99,6 +124,12 @@ Bu reklam açıklaması test için yapılmıştır 2
     var hedefMetin = form.querySelector('input[name="hedef_konum_kaynak_metin"]');
     var haricKaynak = form.querySelector('input[name="haric_konum_resource_name"]');
     var haricMetin = form.querySelector('input[name="haric_konum_kaynak_metin"]');
+    var aiBrief = document.getElementById('ai-brief');
+    var aiOneriOlustur = document.getElementById('ai-oneri-olustur');
+    var aiMesaj = document.getElementById('ai-mesaj');
+    var aiSonuc = document.getElementById('ai-oneri-sonucu');
+    var aiUygula = document.getElementById('ai-onerileri-uygula');
+    var aiOneri = null;
 
     function secimi_gizle() {
         secimKutusu.style.display = 'none';
@@ -146,6 +177,116 @@ Bu reklam açıklaması test için yapılmıştır 2
             hedefKaynak.value = secili.value;
             hedefMetin.value = secimKutusu.getAttribute('data-metin') || '';
         }
+    });
+
+    function ai_listeyi_goster(etiket, degerler) {
+        if (!Array.isArray(degerler) || degerler.length === 0) {
+            return;
+        }
+
+        var blok = document.createElement('p');
+        var baslik = document.createElement('strong');
+        baslik.textContent = etiket + ':';
+        blok.appendChild(baslik);
+
+        var liste = document.createElement('ul');
+        degerler.forEach(function (deger) {
+            var satir = document.createElement('li');
+            satir.textContent = String(deger);
+            liste.appendChild(satir);
+        });
+        blok.appendChild(liste);
+        document.getElementById('ai-oneri-listeleri').appendChild(blok);
+    }
+
+    function ai_oneriyi_goster(oneri) {
+        aiOneri = oneri;
+        document.getElementById('ai-kampanya-adi').textContent = String(oneri.kampanya_adi || 'Belirtilmedi');
+        document.getElementById('ai-kampanya-amaci').textContent = String(oneri.kampanya_amaci || 'Belirtilmedi');
+        document.getElementById('ai-hedef-konum').textContent = String(oneri.hedef_konum || 'Belirtilmedi');
+
+        var listeAlani = document.getElementById('ai-oneri-listeleri');
+        listeAlani.replaceChildren();
+        ai_listeyi_goster('Başlıklar', oneri.basliklar);
+        ai_listeyi_goster('Açıklamalar', oneri.aciklamalar);
+        ai_listeyi_goster('Anahtar kelimeler', oneri.anahtar_kelimeler);
+        ai_listeyi_goster('Negatif anahtar kelimeler', oneri.negatif_anahtar_kelimeler);
+        ai_listeyi_goster('Eksik bilgiler', oneri.eksik_bilgiler);
+        ai_listeyi_goster('Uyarılar', oneri.uyarilar);
+        aiSonuc.hidden = false;
+    }
+
+    aiOneriOlustur.addEventListener('click', function () {
+        var brief = aiBrief.value.trim();
+
+        if (brief === '') {
+            aiMesaj.textContent = 'Önce ne yapmak istediğinizi yazın.';
+            return;
+        }
+
+        aiOneriOlustur.disabled = true;
+        aiSonuc.hidden = true;
+        aiMesaj.textContent = 'Ads önerisi hazırlanıyor...';
+
+        var aiForm = new FormData(form);
+        aiForm.append('brief', brief);
+
+        fetch('api/index.php?islem=ai-kampanya-onerisi', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+            body: aiForm
+        })
+            .then(function (yanit) { return yanit.json(); })
+            .then(function (cevap) {
+                if (cevap.return !== 1 || !cevap.oneri) {
+                    throw new Error(cevap.mesaj || 'AI önerisi alınamadı.');
+                }
+
+                ai_oneriyi_goster(cevap.oneri);
+                aiMesaj.textContent = cevap.mesaj || 'Öneri hazırlandı.';
+            })
+            .catch(function (hata) {
+                aiMesaj.textContent = 'AI önerisi alınamadı.';
+            })
+            .finally(function () {
+                aiOneriOlustur.disabled = false;
+            });
+    });
+
+    aiUygula.addEventListener('click', function () {
+        if (!aiOneri) {
+            return;
+        }
+
+        var alanlar = {
+            kampanya_adi: 'kampanya_adi',
+            hedef_konum: 'hedef_konum',
+            haric_konumlar: 'haric_konumlar',
+            basliklar: 'basliklar',
+            aciklamalar: 'aciklamalar',
+            anahtar_kelimeler: 'anahtar_kelimeler'
+        };
+
+        Object.keys(alanlar).forEach(function (oneriAlani) {
+            var deger = aiOneri[oneriAlani];
+            var alan = form.elements[alanlar[oneriAlani]];
+
+            if (!alan || deger === undefined || deger === null) {
+                return;
+            }
+
+            if (Array.isArray(deger)) {
+                alan.value = deger.join('\n');
+            } else if (String(deger).trim() !== '') {
+                alan.value = String(deger);
+            }
+
+            alan.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        aiMesaj.textContent = 'Öneriler forma uygulandı. Kampanyayı oluşturmak için formu ayrıca gönderin.';
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     function konum_seceneklerini_goster(cevap) {

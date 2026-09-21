@@ -21,6 +21,7 @@ try {
     require_once __DIR__ . '/kampanya-durdur.php';
     require_once __DIR__ . '/kampanya-bitis-tarihi.php';
     require_once __DIR__ . '/kampanya-olustur.php';
+    require_once __DIR__ . '/ai-kampanya-onerisi.php';
     require_once __DIR__ . '/oauth-baslat.php';
     require_once __DIR__ . '/oauth-donus.php';
     require_once __DIR__ . '/../php/oauth/google-oauth.php';
@@ -82,6 +83,10 @@ try {
 
         case 'kampanya-olustur':
             $cevap = api_kampanya_olustur();
+            break;
+
+        case 'ai-kampanya-onerisi':
+            $cevap = api_ai_kampanya_onerisi();
             break;
 
         default:
