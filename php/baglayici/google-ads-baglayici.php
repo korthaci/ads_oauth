@@ -47,11 +47,13 @@ use Google\Ads\GoogleAds\V25\Services\CampaignCriterionOperation;
 use Google\Ads\GoogleAds\V25\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V25\Services\ListAccessibleCustomersRequest;
 use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest\LocationNames;
+use Google\Ads\GoogleAds\V25\Services\MutateCampaignsRequest;
 use Google\Ads\GoogleAds\V25\Services\MutateGoogleAdsRequest;
 use Google\Ads\GoogleAds\V25\Services\MutateOperation;
 use Google\Ads\GoogleAds\V25\Services\SearchGoogleAdsRequest;
 use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest;
 use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsResponse;
+use Google\Ads\GoogleAds\Util\FieldMasks;
 use Google\ApiCore\ApiException;
 
 /**
@@ -726,7 +728,8 @@ function google_ads_musteri_bilgilerini_al(
  *     name: string,
  *     status: string,
  *     advertising_channel_type: string,
- *     budget_amount_micros: int|string|null
+ *     budget_amount_micros: int|string|null,
+ *     end_date_time: ?string
  * }>
  */
 function google_ads_kampanyalari_listele(
@@ -741,7 +744,8 @@ function google_ads_kampanyalari_listele(
 
     try {
         $gaql = 'SELECT campaign.id, campaign.name, campaign.status, '
-            . 'campaign.advertising_channel_type, campaign_budget.amount_micros '
+            . 'campaign.advertising_channel_type, campaign_budget.amount_micros, '
+            . 'campaign.end_date_time '
             . 'FROM campaign ORDER BY campaign.id';
         $search_response = $client->getGoogleAdsServiceClient()->search(
             SearchGoogleAdsRequest::build($customer_id, $gaql)
@@ -762,6 +766,10 @@ function google_ads_kampanyalari_listele(
                 $budget_amount_micros = $budget->getAmountMicros();
             }
 
+            $end_date_time = $campaign->hasEndDateTime()
+                ? trim((string) $campaign->getEndDateTime())
+                : '';
+
             $kampanyalar[] = [
                 'id' => (string) $campaign->getId(),
                 'name' => (string) $campaign->getName(),
@@ -770,6 +778,7 @@ function google_ads_kampanyalari_listele(
                     (int) $campaign->getAdvertisingChannelType()
                 ),
                 'budget_amount_micros' => $budget_amount_micros,
+                'end_date_time' => $end_date_time !== '' ? $end_date_time : null,
             ];
         }
 
@@ -778,6 +787,181 @@ function google_ads_kampanyalari_listele(
         throw $hata;
     } catch (Throwable $hata) {
         google_ads_hata_kaydi_yaz('GoogleAdsService::search campaign', $hata);
+        $kategori = google_ads_hata_kategorisi($hata);
+
+        throw new GoogleAdsKesifHatasi(
+            google_ads_hata_mesaji($kategori),
+            $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * Tek bir kampanyanin detaylarini salt-okunur GAQL sorgusuyla dondurur.
+ *
+ * PROMPT-23: mutate ONCESI sahiplik dogrulamasi icin kullanilir — ID baska bir
+ * hesaba aitsa veya yoksa null doner ve mutate HIC denenmez. Ayni bilgi onay
+ * diyalogunda gunluk butce/bitis tarihi gostermek icin de kullanilir.
+ *
+ * @return array{id: string, name: string, status: string, advertising_channel_type: string, budget_amount_micros: int|string|null, end_date_time: ?string}|null
+ */
+function google_ads_kampanya_ayrintilari_al(
+    string $refresh_token,
+    string $customer_id,
+    string $kampanya_id
+): ?array {
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Google Ads customer ID geçersiz.', 'api');
+    }
+
+    if (preg_match('/^[1-9][0-9]*$/', $kampanya_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Kampanya ID geçersiz.', 'girdi');
+    }
+
+    $client = google_ads_client_olustur($refresh_token, (int) $customer_id);
+
+    try {
+        $gaql = 'SELECT campaign.id, campaign.name, campaign.status, '
+            . 'campaign.advertising_channel_type, campaign_budget.amount_micros, '
+            . 'campaign.end_date_time '
+            . 'FROM campaign WHERE campaign.id = ' . $kampanya_id;
+        $search_response = $client->getGoogleAdsServiceClient()->search(
+            SearchGoogleAdsRequest::build($customer_id, $gaql)
+        );
+
+        foreach ($search_response as $row) {
+            $campaign = $row->getCampaign();
+
+            if ($campaign === null) {
+                continue;
+            }
+
+            $budget = $row->getCampaignBudget();
+            $budget_amount_micros = null;
+
+            if ($budget !== null && $budget->hasAmountMicros()) {
+                $budget_amount_micros = $budget->getAmountMicros();
+            }
+
+            $end_date_time = $campaign->hasEndDateTime()
+                ? trim((string) $campaign->getEndDateTime())
+                : '';
+
+            return [
+                'id' => (string) $campaign->getId(),
+                'name' => (string) $campaign->getName(),
+                'status' => CampaignStatus::name((int) $campaign->getStatus()),
+                'advertising_channel_type' => AdvertisingChannelType::name(
+                    (int) $campaign->getAdvertisingChannelType()
+                ),
+                'budget_amount_micros' => $budget_amount_micros,
+                'end_date_time' => $end_date_time !== '' ? $end_date_time : null,
+            ];
+        }
+
+        return null;
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('GoogleAdsService::search campaign detail', $hata);
+        $kategori = google_ads_hata_kategorisi($hata);
+
+        throw new GoogleAdsKesifHatasi(
+            google_ads_hata_mesaji($kategori),
+            $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * Tek bir kampanyanin status alanini degistirir (PROMPT-23).
+ *
+ * Yalnizca 'ENABLED' veya 'PAUSED' kabul edilir. Google Ads API dogrulamasi
+ * (vendor v25, tahmin yok): CampaignServiceClient (Services\Client altinda)
+ * MutateCampaignsRequest::build($customerId, $operations) alir; yanit
+ * MutateCampaignsResponse::getResults() -> MutateCampaignResult::getResourceName()
+ * icerir (GoogleAdsService.mutate'teki getMutateOperationResponses()'tan farkli).
+ * Update mask FieldMasks::allSetFieldsOf ile yalnizca status alanina kurulur
+ * (resmi SDK update orneklerindeki desen); resource_name yalnizca hedef
+ * kampanyayi adreslemek icin kullanilir.
+ *
+ * @return array{kampanya_kaynagi: string, kampanya_id: string}
+ */
+function google_ads_kampanya_durumunu_degistir(
+    string $refresh_token,
+    string $customer_id,
+    string $kampanya_id,
+    string $hedef_durum
+): array {
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Google Ads customer ID geçersiz.', 'api');
+    }
+
+    if (preg_match('/^[1-9][0-9]*$/', $kampanya_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Kampanya ID geçersiz.', 'girdi');
+    }
+
+    if ($hedef_durum !== 'ENABLED' && $hedef_durum !== 'PAUSED') {
+        throw new GoogleAdsKesifHatasi(
+            'Hedef durum yalnızca ENABLED veya PAUSED olabilir.',
+            'girdi'
+        );
+    }
+
+    $client = google_ads_client_olustur($refresh_token, (int) $customer_id);
+
+    try {
+        $kampanya = (new Campaign())
+            ->setResourceName('customers/' . $customer_id . '/campaigns/' . $kampanya_id)
+            ->setStatus(CampaignStatus::value($hedef_durum));
+
+        $islem = (new CampaignOperation())
+            ->setUpdate($kampanya)
+            ->setUpdateMask(FieldMasks::allSetFieldsOf($kampanya));
+
+        $yanit = $client->getCampaignServiceClient()->mutateCampaigns(
+            MutateCampaignsRequest::build($customer_id, [$islem])
+        );
+
+        $sonuclar = $yanit->getResults();
+
+        if (count($sonuclar) < 1) {
+            // PROMPT-20.5 dersi: bos yanit sessizce basari sayilmaz.
+            throw new GoogleAdsKesifHatasi(
+                'Google Ads yanıtında işlem sonucu bulunamadı; durum değiştirme doğrulanamadı.',
+                'api'
+            );
+        }
+
+        $kaynak = trim((string) $sonuclar[0]->getResourceName());
+
+        if (preg_match('/customers\/[0-9]+\/campaigns\/[0-9]+$/', $kaynak) !== 1) {
+            throw new GoogleAdsKesifHatasi(
+                'Google Ads beklenmeyen bir sonuç kaynağı döndürdü; durum değiştirme doğrulanamadı.',
+                'api'
+            );
+        }
+
+        $beklenen_kaynak = 'customers/' . $customer_id . '/campaigns/' . $kampanya_id;
+
+        if ($kaynak !== $beklenen_kaynak) {
+            throw new GoogleAdsKesifHatasi(
+                'Google Ads beklenmeyen bir sonuç kaynağı döndürdü; durum değiştirme doğrulanamadı.',
+                'api'
+            );
+        }
+
+
+        return [
+            'kampanya_kaynagi' => $kaynak,
+            'kampanya_id' => (string) substr($kaynak, (int) strrpos($kaynak, '/') + 1),
+        ];
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('CampaignService::mutateCampaigns status', $hata);
         $kategori = google_ads_hata_kategorisi($hata);
 
         throw new GoogleAdsKesifHatasi(

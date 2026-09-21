@@ -905,3 +905,197 @@ function kampanya_olustur(array $girdiler): array
         'yerel_kayit' => $yerel_kayit,
     ];
 }
+
+/**
+ * Tek bir kampanyanin status alanini ENABLED veya PAUSED yapar (PROMPT-23).
+ *
+ * Guvenlik akisi: girdi dogrulama -> oturum -> aktif baglanti -> TAZE manager
+ * kontrolu (mutate oncesi; manager hesaba asla mutate denmez) -> kampanyanin
+ * bu hesaba aidiyeti salt-okunur sorguyla dogrulanir (ID baska hesaba aitse
+ * veya yoksa mutate HIC denenmez) -> tek update mutate (yalnizca status).
+ *
+ * Girdi: kampanya_id (zorunlu), hedef_durum (yalnizca 'ENABLED'/'PAUSED';
+ * baska deger — buyuk/kucuk harf farkli dahil — kabul edilmez).
+ *
+ * @param array<string, mixed> $istek
+ * @return array<string, mixed>
+ */
+function kampanya_durumunu_degistir(array $istek): array
+{
+    $hedef_durum = is_string($istek['hedef_durum'] ?? null)
+        ? trim($istek['hedef_durum'])
+        : '';
+
+    if ($hedef_durum !== 'ENABLED' && $hedef_durum !== 'PAUSED') {
+        return [
+            'return' => 0,
+            'mesaj' => 'Hedef durum geçersiz; yalnızca ENABLED veya PAUSED kabul edilir.',
+        ];
+    }
+
+    $kampanya_id = trim((string) ($istek['kampanya_id'] ?? ''));
+
+    if (preg_match('/^[1-9][0-9]*$/', $kampanya_id) !== 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Geçerli bir kampanya ID belirtilmedi.',
+        ];
+    }
+
+    $sahip_no = oturum_sahip_no();
+
+    if ($sahip_no === null || $sahip_no < 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Oturum gerekli.',
+        ];
+    }
+    try {
+        $once = google_baglanmis_hesap_snapshot_al($sahip_no);
+        $baglanti = google_kampanya_baglantisini_al($sahip_no);
+    } catch (Throwable $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlı Google Ads hesabı kontrol edilemedi.',
+        ];
+    }
+
+    if ($baglanti === null) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlı Google Ads hesabı bulunamadı.',
+            'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla(
+                $once,
+                $once
+            ),
+        ];
+    }
+
+    $customer_id = trim((string) ($baglanti['harici_kimlik'] ?? ''));
+
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlanan Google Ads hesabının customer ID bilgisi bulunamadı.',
+            'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla(
+                $once,
+                $once
+            ),
+        ];
+    }
+
+    try {
+        $refresh_token = coz($baglanti['refresh_token_sifreli']);
+
+        if (trim($refresh_token) === '') {
+            throw new GoogleAdsKesifHatasi(
+                'Google OAuth kimlik bilgileri veya refresh token kullanılamadı.',
+                'oauth'
+            );
+        }
+
+        try {
+            // Taze manager kontrolü: her mutate öncesi tekrarlanır (PROMPT-16).
+            $customer = google_ads_musteri_bilgilerini_al($refresh_token, $customer_id);
+
+            if ($customer['manager']) {
+                $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+                return [
+                    'return' => 0,
+                    'mesaj' => 'Bağlı hesap Manager hesabı; kampanyaya müdahale edilmedi.',
+                    'hesap' => $customer,
+                    'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla(
+                        $once,
+                        $sonra
+                    ),
+                ];
+            }
+
+            // Sahiplik doğrulaması: ID bu hesapta yoksa mutate hiç denenmez.
+            $ayrinti = google_ads_kampanya_ayrintilari_al(
+                $refresh_token,
+                $customer_id,
+                $kampanya_id
+            );
+
+            if ($ayrinti === null) {
+                $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+                return [
+                    'return' => 0,
+                    'mesaj' => 'Bu kampanya bağlı hesapta bulunamadı; durum değiştirilmedi.',
+                    'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla(
+                        $once,
+                        $sonra
+                    ),
+                ];
+            }
+
+            $sonuc = google_ads_kampanya_durumunu_degistir(
+                $refresh_token,
+                $customer_id,
+                $kampanya_id,
+                $hedef_durum
+            );
+        } finally {
+            unset($refresh_token);
+        }
+    } catch (GoogleAdsKesifHatasi $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Kampanya durumu değiştirilemedi.',
+            'google_ads_hata_kategorisi' => $hata->kategori,
+            'google_ads_hata' => $hata->getMessage(),
+        ];
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('kampanya_durumunu_degistir', $hata);
+
+        return [
+            'return' => 0,
+            'mesaj' => 'Kampanya durumu değiştirilemedi.',
+        ];
+    }
+
+    $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+    // Yerel kampanyalar kaydina non-fatal yansima (PROMPT-20 deseni; yerel
+    // yazma hatasi Google basarisini icermez).
+    $yerel_kayit = 'yazildi';
+
+    try {
+        $guncelle = veritabani_baglan()->prepare(
+            'UPDATE `kampanyalar` SET `durum` = :durum '
+            . 'WHERE `hesap_no` = :hesap_no AND `platform` = :platform '
+            . 'AND `harici_kampanya_id` = :kampanya_id'
+        );
+        $guncelle->execute([
+            'durum' => $hedef_durum === 'ENABLED' ? 'yayinda' : 'duraklatildi',
+            'hesap_no' => (int) $baglanti['no'],
+            'platform' => 'google',
+            'kampanya_id' => $sonuc['kampanya_id'],
+        ]);
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('kampanya_durumunu_degistir.yerel_kayit', $hata);
+        $yerel_kayit = 'yazilamadi';
+    }
+
+    return [
+        'return' => 1,
+        'mesaj' => $hedef_durum === 'ENABLED'
+            ? 'Kampanya yayına alındı (ENABLED). Reklamların yayına girmesi '
+                . 'Google tarafında birkaç dakika sürebilir; gerçek harcama '
+                . 'başlamıştır.'
+            : 'Kampanya duraklatıldı (PAUSED); harcama durduruldu.',
+        'kampanya_kaynagi' => $sonuc['kampanya_kaynagi'],
+        'kampanya_id' => $sonuc['kampanya_id'],
+        'kampanya_adi' => $ayrinti['name'],
+        'oncelikli_durum' => $ayrinti['status'],
+        'durum' => $hedef_durum,
+        'yerel_kayit' => $yerel_kayit,
+        'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla(
+            $once,
+            $sonra
+        ),
+    ];
+}

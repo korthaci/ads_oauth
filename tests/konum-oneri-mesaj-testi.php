@@ -409,7 +409,7 @@ foreach ([
     "EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING" => 1,
     "setContainsEuPoliticalAdvertising(" => 1,
     "\$sonuclar = \$yanit->getMutateOperationResponses();" => 1,
-    "->getResults()" => 0,
+    "->getResults()" => 1,
     '->setNegative(true)' => 1,
     '->setEndDateTime(' => 1,
     "'durum' => 'tek'" => 1,
@@ -616,6 +616,8 @@ $vaka_sayisi += 4;
 
 // 14) PROMPT-21 kaynak taramasi: servis (konum secenekleri akisi, hariç
 //     konumlar, bitis tarihi) ve sihirbaz (yeni alanlar + secim arayuzu).
+//     PROMPT-23 CampaignService yanitinda getResults() kullanir; bu nedenle
+//     servis taramasinda bu desenin bulunmasi beklenir.
 $servis_kod = file_get_contents(__DIR__ . '/../php/servis/kampanya-servisi.php');
 $sihirbaz_kod = file_get_contents(__DIR__ . '/../tema/panel/kampanya-sihirbazi.php');
 

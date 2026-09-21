@@ -16,16 +16,19 @@ require __DIR__ . '/../layout/header.php';
         <input type="text" id="web_sitesi" name="web_sitesi" required autocomplete="off"
         value="https://n0n1.tr"
                placeholder="ornek.com (https:// otomatik eklenir)">
+        <small class="hint">Reklam tıklanınca ziyaretçinin gideceği adres; https:// eksikse otomatik eklenir.</small>
     </p>
     <p>
         <label for="kampanya_adi">Kampanya / iş adı</label><br>
         <input type="text" id="kampanya_adi" name="kampanya_adi" required maxlength="255"
         value="n0n1-ads-kampanya-test-2"/>
+        <small class="hint">Kampanyayı listede kolayca tanıyacağınız isim.</small>
     </p>
     <p>
         <label for="basliklar">Reklam başlıkları (en az 3, en fazla 15; her biri en fazla 30 karakter)</label><br>
         <textarea id="basliklar" name="basliklar" rows="4" required
                   placeholder="Her satıra veya virgülle ayırarak yazın"></textarea>
+        <small class="hint">Her satıra veya virgülle ayırarak yazabilirsiniz; Google uygun başlıkları dönüşümlü kullanır.</small>
                   Örnek : Web sitenizi oluşturun
 Şimdi web sitesi yapın
 Hemen yayına alın
@@ -34,6 +37,7 @@ Hemen yayına alın
         <label for="aciklamalar">Reklam açıklamaları (en az 2, en fazla 4; her biri en fazla 90 karakter)</label><br>
         <textarea id="aciklamalar" name="aciklamalar" rows="3" required
                   placeholder="Her satıra veya virgülle ayırarak yazın"></textarea>
+        <small class="hint">Ürününüzü veya hizmetinizi açıklayan kısa metinler; her biri en fazla 90 karakterdir.</small>
 
                   Örnek : Bu reklam açıklaması test için yapılmıştır,
 Bu reklam açıklaması test için yapılmıştır 2
@@ -42,25 +46,30 @@ Bu reklam açıklaması test için yapılmıştır 2
         <label for="anahtar_kelimeler">Anahtar kelimeler (en az 1; virgülle ayırın)</label><br>
         <textarea id="anahtar_kelimeler" name="anahtar_kelimeler" rows="3" required
                   placeholder="örnek kelime 1, örnek kelime 2"></textarea>
+        <small class="hint">Müşterilerin arayabileceği kelimeleri her satıra veya virgülle ayırarak yazın.</small>
                   Örnek : web sitesi yap,web sitesi oluştur
     </p>
     <p>
         <label for="gunluk_butce">Günlük bütçe (TL)</label><br>
         <input type="text" id="gunluk_butce" name="gunluk_butce" required
                inputmode="decimal" placeholder="500" value="500">
+        <small class="hint">Google'ın günlük ortalamada hedefleyeceği tutardır; bazı günler biraz daha fazla harcayabilir.</small>
     </p>
     <p>
         <label for="hedef_konum">Hedef konum (şehir / bölge / ülke)</label><br>
         <input type="text" id="hedef_konum" name="hedef_konum" required placeholder="Ankara" value="Ankara">
+        <small class="hint">Reklamın gösterileceği şehir, bölge veya ülke; birden fazla eşleşmede seçim yapmanız istenir.</small>
     </p>
     <p>
         <label for="haric_konumlar">Hariç tutulacak bölgeler (opsiyonel; virgülle veya satırla ayırın)</label><br>
         <textarea id="haric_konumlar" name="haric_konumlar" rows="2"
                   placeholder="örn. Trabzon, Kırıkkale"></textarea>
+        <small class="hint">Reklam göstermek istemediğiniz bölgeleri virgülle veya satırla ayırın; bu alan isteğe bağlıdır.</small>
     </p>
     <p>
         <label for="toplam_butce">Toplam bütçe (TL, opsiyonel)</label><br>
         <input type="text" id="toplam_butce" name="toplam_butce" inputmode="decimal" placeholder="örn. 5000">
+        <small class="hint">İsteğe bağlı yaklaşık toplam tutar; girilirse buna göre bir bitiş tarihi atanır, kesin harcama sınırı değildir.</small>
         <br>
         <small>Bu, kesin bir toplam harcama garantisi değildir — Google bazı günlerde
         günlük bütçenin biraz üzerinde harcayıp ayı ortalayabilir; bu alan yalnızca

@@ -87,6 +87,11 @@ if (($_GET['islem'] ?? '') === 'kampanya-sihirbazi') {
     exit;
 }
 
+if (($_GET['islem'] ?? '') === 'kampanyalarim') {
+    require __DIR__ . '/tema/panel/kampanyalarim.php';
+    exit;
+}
+
 $google_panel_baglantisi = null;
 $google_panel_baglanti_kontrol_hatasi = false;
 

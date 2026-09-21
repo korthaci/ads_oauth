@@ -1,0 +1,35 @@
+:root {
+    color-scheme: light;
+    font-family: Arial, sans-serif;
+    color: #1f2937;
+    background: #f5f7fb;
+}
+
+body { margin: 0; background: #f5f7fb; }
+.site-header { background: #173b6c; box-shadow: 0 2px 8px #0002; }
+.site-nav { max-width: 1100px; margin: 0 auto; padding: 12px 20px; display: flex; gap: 18px; flex-wrap: wrap; }
+.site-nav a { color: #fff; text-decoration: none; font-weight: 600; }
+.site-nav a:hover, .site-nav a:focus { text-decoration: underline; }
+.panel-main { max-width: 1100px; margin: 28px auto; padding: 0 20px 40px; }
+.panel-main input, .panel-main textarea { max-width: 680px; width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #b8c2d1; border-radius: 4px; font: inherit; }
+.panel-main button { padding: 9px 14px; border: 0; border-radius: 4px; background: #1769aa; color: #fff; cursor: pointer; font-weight: 600; }
+.panel-main button:hover:not(:disabled), .panel-main button:focus:not(:disabled) { background: #0e4e83; }
+.panel-main button:disabled { opacity: .55; cursor: not-allowed; }
+.form-field { margin: 0 0 18px; }
+.hint { display: block; max-width: 680px; margin-top: 5px; color: #687386; font-size: .9rem; line-height: 1.4; }
+.status-message { min-height: 1.5em; }
+.alert { padding: 12px 14px; border-radius: 5px; margin: 12px 0; }
+.alert-success { background: #e5f6eb; border: 1px solid #65b879; color: #155724; }
+.alert-error { background: #fff0f0; border: 1px solid #d66; color: #8a1c1c; }
+.alert-warning { background: #fff7df; border: 1px solid #e2b84b; color: #664d03; }
+.campaign-table { width: 100%; border-collapse: collapse; background: #fff; }
+.campaign-table th, .campaign-table td { padding: 10px; border: 1px solid #d7dde8; text-align: left; vertical-align: top; }
+.campaign-table th { background: #e9eef6; }
+.campaign-table td:last-child { white-space: nowrap; }
+.confirm-box { max-width: 680px; padding: 16px; border: 2px solid #d89b22; border-radius: 6px; background: #fffaf0; }
+.confirm-box input { margin: 8px 0; }
+.confirm-box strong { color: #9a1b1b; }
+@media (max-width: 700px) {
+    .campaign-table { display: block; overflow-x: auto; }
+    .site-nav { gap: 10px 14px; }
+}

@@ -1545,3 +1545,32 @@ php/servis/hesap-servisi.php — HEPSİ temiz.
 giriş ekranında kayıt formu görünmemeli. Deploy sonrası NO-STORE header'ın
 gerçekten ulaştığını da teyit et (DevTools → Network → index.php yanıt
 başlıkları: `Cache-Control: no-store, private`).
+
+## PROMPT-23 — Yayına al/duraklat, kampanya listesi ve panel UX (tamamlandı)
+
+- [x] `api/kampanya-durdur.php` ince köprü olarak `kampanya_durumunu_degistir()` servisine bağlandı; yalnızca `ENABLED`/`PAUSED` ve pozitif kampanya ID kabul ediliyor.
+- [x] Mutate öncesi aktif bağlantı, taze non-manager kontrolü ve bağlı customer içindeki salt-okunur kampanya sahiplik sorgusu uygulanıyor. Manager hesapta ve bulunamayan/başka hesaba ait ID'de mutate denenmiyor.
+- [x] `CampaignServiceClient::mutateCampaigns()` vendor v25 yanıtı doğrulandı; boş sonuç reddediliyor ve dönen resource adı beklenen `customers/{customer_id}/campaigns/{kampanya_id}` ile birebir karşılaştırılıyor.
+- [x] `tema/panel/kampanyalarim.php` eklendi: kampanya adı, Türkçe durum, kanal, micros → TL günlük bütçe, bitiş tarihi, yükleniyor/hata/Manager uyarısı.
+- [x] ENABLED için kampanya adının yazıldığı güçlü onay ve bütçe/bitiş gösterimi; PAUSED için ayrı basit onay akışı eklendi. Başarı bildirimi sayfada kalıyor.
+- [x] Giriş sonrası navigasyon (`Ana Sayfa | Kampanyalarım | Kampanya Oluştur | Çıkış Yap`) ve ortak panel CSS'i eklendi. Sihirbaz alanlarına gri açıklamalar eklendi.
+- [x] Doğrulama: servis/adapter/API/panel PHP lint temiz; `tests/prompt-23-durum-degistirme-testi.php` **8/8, exit 0**.
+
+### PROMPT-23 deploy listesi
+
+- `api/index.php`, `api/kampanya-durdur.php`, `index.php`
+- `php/baglayici/google-ads-baglayici.php`, `php/servis/kampanya-servisi.php`
+- `tema/layout/header.php`, `tema/css/panel.css`, `tema/panel/kampanyalarim.php`, `tema/panel/kampanya-sihirbazi.php`
+- `md/DURUM.md`
+
+Deploy sonrası Kort kontrolü: `Cache-Control: no-store` header'ı, yeni kampanyada Türkçe dil sabiti ve kampanya paneli erişimi.
+
+### Düşük bütçeli canlı test (Kort)
+
+1. Kampanyalarım panelinde düşük bütçeli test kampanyasını açın; bütçe ve bitiş tarihini kontrol edin.
+2. **Yayına Al** düğmesine basın; kampanya adını eksiksiz yazmadan onay düğmesinin aktif olmadığını doğrulayın.
+3. Onaydan sonra Google Ads tarafında kısa süreli `ENABLED` durumunu ve panelde kalıcı başarı mesajını doğrulayın.
+4. Kısa süre içinde aynı satırdaki **Duraklat** düğmesiyle `PAUSED` yapın; harcamanın durduğunu Google Ads'te kontrol edin.
+5. Testi gerçek düşük bütçeli kampanyayla, kısa süreyle yapın; eski yanlış dil sabitli kampanyalar otomatik değiştirilmez.
+
+Geçici vendor doğrulama ve sentetik test dosyaları final doğrulama sonrasında çalışma ağacından kaldırılmıştır; canlı doğrulama Kort'a bağlıdır.
