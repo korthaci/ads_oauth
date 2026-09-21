@@ -304,6 +304,28 @@ function kampanya_metnini_listeye_ayir(string $metin): array
 }
 
 /**
+ * Reklam aciklamalarini yalnizca satir sonlarina gore listeye ayirir.
+ * Virguller aciklama metninin parcasi olarak korunur; bos satirlar atilir.
+ *
+ * @return array<int, string>
+ */
+function kampanya_aciklamalarini_satirlara_ayir(string $metin): array
+{
+    $satirlar = preg_split('/\r\n|\r|\n/u', $metin) ?: [];
+    $aciklamalar = [];
+
+    foreach ($satirlar as $satir) {
+        $aciklama = trim($satir);
+
+        if ($aciklama !== '') {
+            $aciklamalar[] = $aciklama;
+        }
+    }
+
+    return $aciklamalar;
+}
+
+/**
  * Yaklasik toplam butceden kampanya bitis tarihini hesaplar (PROMPT-21 §3).
  *
  * bitis = bugun + floor(toplam_micros / gunluk_micros) gun. floor, micros
@@ -541,7 +563,7 @@ function kampanya_girdilerini_dogrula(array $girdiler): array
         }
     }
 
-    $aciklamalar = kampanya_metnini_listeye_ayir(
+    $aciklamalar = kampanya_aciklamalarini_satirlara_ayir(
         (string) ($girdiler['aciklamalar'] ?? '')
     );
 

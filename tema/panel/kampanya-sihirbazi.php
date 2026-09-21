@@ -61,8 +61,9 @@ require __DIR__ . '/../layout/header.php';
     <p>
         <label for="aciklamalar">Reklam açıklamaları (en az 2, en fazla 4; her biri en fazla 90 karakter)</label><br>
         <textarea id="aciklamalar" name="aciklamalar" rows="3" required
-                  placeholder="Her satıra veya virgülle ayırarak yazın"></textarea>
+                  placeholder="Her açıklamayı ayrı bir satıra yazın"></textarea>
         <small class="hint">Ürününüzü veya hizmetinizi açıklayan kısa metinler; her biri en fazla 90 karakterdir.<br>
+    Her açıklamayı ayrı bir satıra yazın; açıklama içindeki virgüller korunur.<br>
     Örnek : Bu reklam açıklaması test için yapılmıştır,
 Bu reklam açıklaması test için yapılmıştır 2
 </small>                  
