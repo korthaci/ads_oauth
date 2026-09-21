@@ -55,26 +55,26 @@ require __DIR__ . '/../layout/header.php';
         <label for="basliklar">Reklam başlıkları (en az 3, en fazla 15; her biri en fazla 30 karakter)</label><br>
         <textarea id="basliklar" name="basliklar" rows="4" required
                   placeholder="Her satıra veya virgülle ayırarak yazın"></textarea>
-        <small class="hint">Her satıra veya virgülle ayırarak yazabilirsiniz; Google uygun başlıkları dönüşümlü kullanır.</small>
-                  Örnek : Web sitenizi oluşturun
-Şimdi web sitesi yapın
-Hemen yayına alın
+        <small class="hint">Her satıra veya virgülle ayırarak yazabilirsiniz; Google uygun başlıkları dönüşümlü kullanır.
+        <br>
+        Örnek : Web sitenizi oluşturun Şimdi web sitesi yapın Hemen yayına alın 
+        </small>                  
     </p>
     <p>
         <label for="aciklamalar">Reklam açıklamaları (en az 2, en fazla 4; her biri en fazla 90 karakter)</label><br>
         <textarea id="aciklamalar" name="aciklamalar" rows="3" required
                   placeholder="Her satıra veya virgülle ayırarak yazın"></textarea>
-        <small class="hint">Ürününüzü veya hizmetinizi açıklayan kısa metinler; her biri en fazla 90 karakterdir.</small>
-
-                  Örnek : Bu reklam açıklaması test için yapılmıştır,
+        <small class="hint">Ürününüzü veya hizmetinizi açıklayan kısa metinler; her biri en fazla 90 karakterdir.<br>
+    Örnek : Bu reklam açıklaması test için yapılmıştır,
 Bu reklam açıklaması test için yapılmıştır 2
+</small>                  
     </p>
     <p class="form-field">
         <label for="anahtar_kelimeler">Anahtar kelimeler (en az 1; virgülle ayırın)</label><br>
         <textarea id="anahtar_kelimeler" name="anahtar_kelimeler" rows="3" required
                   placeholder="örnek kelime 1, örnek kelime 2"></textarea>
-        <small class="hint">Müşterilerin arayabileceği kelimeleri her satıra veya virgülle ayırarak yazın.</small>
-                  Örnek : web sitesi yap,web sitesi oluştur
+        <small class="hint">Müşterilerin arayabileceği kelimeleri her satıra veya virgülle ayırarak yazın.<br>Örnek : web sitesi yap,web sitesi oluştur</small>
+                  
     </p>
     <p class="form-field keyword-negative-field">
         <label for="negatif_anahtar_kelimeler">Negatif anahtar kelimeler (opsiyonel; en fazla 20)</label><br>
