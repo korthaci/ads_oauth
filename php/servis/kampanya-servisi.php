@@ -1122,3 +1122,164 @@ function kampanya_durumunu_degistir(array $istek): array
         ),
     ];
 }
+
+/**
+ * Tek bir kampanyanin bitis tarihini degistirir.
+ *
+ * Guvenlik akisi durum mutate'iyle aynidir: girdi dogrulama -> oturum -> aktif
+ * baglanti -> taze manager kontrolu -> kampanyanin bu hesaba aidiyeti -> mutate.
+ * Bitis tarihi YYYY-MM-DD olarak alinir; gecmis tarihler reddedilir.
+ *
+ * @param array<string, mixed> $istek
+ * @return array<string, mixed>
+ */
+function kampanya_bitis_tarihini_degistir(array $istek): array
+{
+    $kampanya_id = trim((string) ($istek['kampanya_id'] ?? ''));
+    $bitis_tarihi = is_string($istek['bitis_tarihi'] ?? null)
+        ? trim($istek['bitis_tarihi'])
+        : '';
+
+    if (preg_match('/^[1-9][0-9]*$/', $kampanya_id) !== 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Geçerli bir kampanya ID belirtilmedi.',
+        ];
+    }
+
+    $tarih = DateTimeImmutable::createFromFormat('!Y-m-d', $bitis_tarihi);
+    $tarih_hatalari = DateTimeImmutable::getLastErrors();
+    $tarih_gecersiz = $tarih === false
+        || ($tarih_hatalari !== false
+            && ($tarih_hatalari['warning_count'] > 0 || $tarih_hatalari['error_count'] > 0))
+        || ($tarih !== false && $tarih->format('Y-m-d') !== $bitis_tarihi);
+
+    if ($tarih_gecersiz) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Geçerli bir bitiş tarihi seçin.',
+        ];
+    }
+
+    if ($tarih < new DateTimeImmutable('today')) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bitiş tarihi bugün veya daha ileri bir tarih olmalıdır.',
+        ];
+    }
+
+    $sahip_no = oturum_sahip_no();
+
+    if ($sahip_no === null || $sahip_no < 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Oturum gerekli.',
+        ];
+    }
+
+    try {
+        $once = google_baglanmis_hesap_snapshot_al($sahip_no);
+        $baglanti = google_kampanya_baglantisini_al($sahip_no);
+    } catch (Throwable $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlı Google Ads hesabı kontrol edilemedi.',
+        ];
+    }
+
+    if ($baglanti === null) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlı Google Ads hesabı bulunamadı.',
+            'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla($once, $once),
+        ];
+    }
+
+    $customer_id = trim((string) ($baglanti['harici_kimlik'] ?? ''));
+
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Bağlanan Google Ads hesabının customer ID bilgisi bulunamadı.',
+            'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla($once, $once),
+        ];
+    }
+
+    try {
+        $refresh_token = coz($baglanti['refresh_token_sifreli']);
+
+        if (trim($refresh_token) === '') {
+            throw new GoogleAdsKesifHatasi(
+                'Google OAuth kimlik bilgileri veya refresh token kullanılamadı.',
+                'oauth'
+            );
+        }
+
+        try {
+            $customer = google_ads_musteri_bilgilerini_al($refresh_token, $customer_id);
+
+            if ($customer['manager']) {
+                $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+                return [
+                    'return' => 0,
+                    'mesaj' => 'Bağlı hesap Manager hesabı; kampanyaya müdahale edilmedi.',
+                    'hesap' => $customer,
+                    'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla($once, $sonra),
+                ];
+            }
+
+            $ayrinti = google_ads_kampanya_ayrintilari_al(
+                $refresh_token,
+                $customer_id,
+                $kampanya_id
+            );
+
+            if ($ayrinti === null) {
+                $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+                return [
+                    'return' => 0,
+                    'mesaj' => 'Bu kampanya bağlı hesapta bulunamadı; bitiş tarihi değiştirilmedi.',
+                    'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla($once, $sonra),
+                ];
+            }
+
+            $sonuc = google_ads_kampanya_bitis_tarihini_degistir(
+                $refresh_token,
+                $customer_id,
+                $kampanya_id,
+                $bitis_tarihi
+            );
+        } finally {
+            unset($refresh_token);
+        }
+    } catch (GoogleAdsKesifHatasi $hata) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Kampanya bitiş tarihi değiştirilemedi.',
+            'google_ads_hata_kategorisi' => $hata->kategori,
+            'google_ads_hata' => $hata->getMessage(),
+        ];
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('kampanya_bitis_tarihini_degistir', $hata);
+
+        return [
+            'return' => 0,
+            'mesaj' => 'Kampanya bitiş tarihi değiştirilemedi.',
+        ];
+    }
+
+    $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+    return [
+        'return' => 1,
+        'mesaj' => 'Kampanya bitiş tarihi güncellendi.',
+        'kampanya_kaynagi' => $sonuc['kampanya_kaynagi'],
+        'kampanya_id' => $sonuc['kampanya_id'],
+        'kampanya_adi' => $ayrinti['name'],
+        'bitis_tarihi' => $bitis_tarihi,
+        'end_date_time' => $sonuc['end_date_time'],
+        'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla($once, $sonra),
+    ];
+}

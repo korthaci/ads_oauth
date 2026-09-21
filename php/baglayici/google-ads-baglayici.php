@@ -55,6 +55,7 @@ use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsRequest;
 use Google\Ads\GoogleAds\V25\Services\SuggestGeoTargetConstantsResponse;
 use Google\Ads\GoogleAds\Util\FieldMasks;
 use Google\ApiCore\ApiException;
+use Google\Protobuf\FieldMask;
 
 /**
  * Google Ads kesif islemlerinde kullaniciya gosterilebilecek guvenli hata.
@@ -973,6 +974,92 @@ function google_ads_kampanya_durumunu_degistir(
             'CampaignService::mutateCampaigns ' . ($hedef_durum === 'REMOVED' ? 'remove' : 'status'),
             $hata
         );
+        $kategori = google_ads_hata_kategorisi($hata);
+
+        throw new GoogleAdsKesifHatasi(
+            google_ads_hata_mesaji($kategori),
+            $kategori,
+            $hata
+        );
+    }
+}
+
+/**
+ * Bir kampanyanin bitis tarihini degistirir.
+ *
+ * Google Ads end_date_time alani tam tarih-saat bekler. Panelden gelen gun,
+ * kampanyanin secilen gunun sonuna kadar surmesi icin 23:59:59 olarak gonderilir.
+ * Update mask yalnizca end_date_time alanini icerir.
+ *
+ * @return array{kampanya_kaynagi: string, kampanya_id: string, end_date_time: string}
+ */
+function google_ads_kampanya_bitis_tarihini_degistir(
+    string $refresh_token,
+    string $customer_id,
+    string $kampanya_id,
+    string $bitis_tarihi
+): array {
+    if (preg_match('/^[1-9][0-9]*$/', $customer_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Google Ads customer ID geçersiz.', 'api');
+    }
+
+    if (preg_match('/^[1-9][0-9]*$/', $kampanya_id) !== 1) {
+        throw new GoogleAdsKesifHatasi('Kampanya ID geçersiz.', 'girdi');
+    }
+
+    if (preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/', $bitis_tarihi) !== 1) {
+        throw new GoogleAdsKesifHatasi('Bitiş tarihi geçersiz.', 'girdi');
+    }
+
+    [$yil, $ay, $gun] = array_map('intval', explode('-', $bitis_tarihi));
+
+    if (!checkdate($ay, $gun, $yil)) {
+        throw new GoogleAdsKesifHatasi('Bitiş tarihi geçersiz.', 'girdi');
+    }
+
+    $client = google_ads_client_olustur($refresh_token, (int) $customer_id);
+
+    try {
+        $kaynak = 'customers/' . $customer_id . '/campaigns/' . $kampanya_id;
+        $google_bitis_tarihi = $bitis_tarihi . ' 23:59:59';
+        $kampanya = (new Campaign())
+            ->setResourceName($kaynak)
+            ->setEndDateTime($google_bitis_tarihi);
+        $islem = (new CampaignOperation())
+            ->setUpdate($kampanya)
+            ->setUpdateMask((new FieldMask())->setPaths(['end_date_time']));
+
+        $yanit = $client->getCampaignServiceClient()->mutateCampaigns(
+            MutateCampaignsRequest::build($customer_id, [$islem])
+        );
+        $sonuclar = $yanit->getResults();
+
+        if (count($sonuclar) < 1) {
+            throw new GoogleAdsKesifHatasi(
+                'Google Ads yanıtında işlem sonucu bulunamadı; bitiş tarihi doğrulanamadı.',
+                'api'
+            );
+        }
+
+        $yanit_kaynagi = trim((string) $sonuclar[0]->getResourceName());
+        $beklenen_kaynak = 'customers/' . $customer_id . '/campaigns/' . $kampanya_id;
+
+        if ($yanit_kaynagi !== $beklenen_kaynak) {
+            throw new GoogleAdsKesifHatasi(
+                'Google Ads beklenmeyen bir sonuç kaynağı döndürdü; bitiş tarihi doğrulanamadı.',
+                'api'
+            );
+        }
+
+        return [
+            'kampanya_kaynagi' => $yanit_kaynagi,
+            'kampanya_id' => (string) substr($yanit_kaynagi, (int) strrpos($yanit_kaynagi, '/') + 1),
+            'end_date_time' => $google_bitis_tarihi,
+        ];
+    } catch (GoogleAdsKesifHatasi $hata) {
+        throw $hata;
+    } catch (Throwable $hata) {
+        google_ads_hata_kaydi_yaz('CampaignService::mutateCampaigns end_date_time', $hata);
         $kategori = google_ads_hata_kategorisi($hata);
 
         throw new GoogleAdsKesifHatasi(

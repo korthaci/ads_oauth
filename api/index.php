@@ -19,6 +19,7 @@ try {
     require_once __DIR__ . '/../php/servis/hesap-servisi.php';
     require_once __DIR__ . '/kampanya-listele.php';
     require_once __DIR__ . '/kampanya-durdur.php';
+    require_once __DIR__ . '/kampanya-bitis-tarihi.php';
     require_once __DIR__ . '/kampanya-olustur.php';
     require_once __DIR__ . '/oauth-baslat.php';
     require_once __DIR__ . '/oauth-donus.php';
@@ -73,6 +74,10 @@ try {
 
         case 'kampanya-durdur':
             $cevap = api_kampanya_durdur();
+            break;
+
+        case 'kampanya-bitis-tarihi':
+            $cevap = api_kampanya_bitis_tarihi();
             break;
 
         case 'kampanya-olustur':

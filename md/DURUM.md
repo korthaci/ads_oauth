@@ -14,7 +14,17 @@ GitHub: https://github.com/korthaci/ads_oauth
 > **Güncelleme sorumluluğu kod yazıcı AI'ye (Cline/Requesty) aittir.** Claude bu dosyayı
 > artık düzenlemez, sadece yeni prompt hazırlarken referans olarak okur.
 
-**Son güncelleme:** 2026-09-18
+**Son güncelleme:** 2026-09-21
+
+### 2026-09-21 — Kampanya bitiş tarihi güncelleme
+
+- Kampanyalarım ekranına standart `input[type=date]` ve Kaydet akışı eklendi.
+- Yeni `kampanya-bitis-tarihi` API işlemi, mevcut oturum/hesap/Manager/sahiplik
+  kontrollerinden sonra Google Ads `Campaign.end_date_time` alanını günceller.
+- Sunucu yalnızca `YYYY-MM-DD` biçimini, gerçek takvim tarihini ve bugün/ileri
+  tarihleri kabul eder; Google mutate isteği `23:59:59` ve yalnızca
+  `end_date_time` update maskesiyle gönderilir.
+- Sentetik test: `tests/kampanya-bitis-tarihi-testi.php`.
 
 **Proje durumu:** **AKTİF** — Kapsam netleşti (kişisel kullanım + davetli 1-2 kişi),
 Manager üzerinden hesap oluşturma yaklaşımı terk edildi, kullanıcı kendi hesabını
@@ -877,9 +887,10 @@ Bilerek iskelet bırakılanlar (karar (b)) ve gerçek mantık/plan durumu:
   dışı (DURUM.md proje durumu: “Meta entegrasyonu bu projenin kapsamı değildir”).
 - `C:\server\htdocs\ads-oauth\api\hesap-sil.php`: bağlantı kaldırma henüz
   uygulanmadı; dispatch’te yok, gerçek karşılığı yok.
-- `C:\server\htdocs\ads-oauth\api\kampanya-olustur.php` ve
-  `api\kampanya-durdur.php`: kampanya yazma işlemleri henüz uygulanmadı;
-  mevcut kampanya işi PROMPT-16/17 read-only listeleme kapsamındadır.
+- `C:\server\htdocs\ads-oauth\api\kampanya-olustur.php`: kampanya oluşturma
+  işlemi henüz uygulanmadı. `api\kampanya-durdur.php` durum değişikliği ve
+  `api\kampanya-bitis-tarihi.php` bitiş tarihi güncellemesi için gerçektir;
+  ikisi de mevcut kampanya sahiplik/Manager güvenlik akışını kullanır.
 - `C:\server\htdocs\ads-oauth\api\senkron-tetikle.php`,
   `php\servis\senkron-servisi.php`, `php\cron\senkron-calistir.php`: senkron
   sistemi henüz uygulanmadı; gerçek karşılığı yok.
