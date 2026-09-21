@@ -87,6 +87,12 @@ if (($_GET['islem'] ?? '') === 'kampanyalarim') {
     exit;
 }
 
+if (($_GET['islem'] ?? '') === 'google-hesap-sec') {
+    require_once __DIR__ . '/php/oauth/google-oauth.php';
+    require __DIR__ . '/tema/panel/hesap-baglan.php';
+    exit;
+}
+
 $google_panel_baglantisi = null;
 $google_panel_baglanti_kontrol_hatasi = false;
 

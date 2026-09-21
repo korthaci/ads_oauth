@@ -59,6 +59,21 @@ try {
 
         case 'oauth-donus':
             $cevap = api_oauth_donus();
+
+            if (
+                ($cevap['return'] ?? 0) === 1
+                && isset($cevap['url'])
+                && is_string($cevap['url'])
+                && $cevap['url'] !== ''
+            ) {
+                header('Location: ../' . ltrim($cevap['url'], '/'));
+                exit;
+            }
+
+            break;
+
+        case 'google-hesap-sec':
+            $cevap = google_oauth_hesap_sec();
             break;
 
         case 'google-hesap-kesfet':

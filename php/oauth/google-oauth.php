@@ -22,6 +22,7 @@ const GOOGLE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/adwords';
 const GOOGLE_OAUTH_AUTHORIZATION_URI = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_OAUTH_TOKEN_URI = 'https://oauth2.googleapis.com/token';
 const GOOGLE_OAUTH_STATE_SESSION_KEY = 'google_oauth_state';
+const GOOGLE_OAUTH_BEKLEYEN_HESAP_SESSION_KEY = 'google_oauth_bekleyen_hesap';
 
 /**
  * Google OAuth callback URI'sini config'ten alir ve guvenli bir callback
@@ -128,6 +129,7 @@ function google_oauth_baslat(): array
 
     oturum_baslat();
     $_SESSION[GOOGLE_OAUTH_STATE_SESSION_KEY] = $state;
+    unset($_SESSION[GOOGLE_OAUTH_BEKLEYEN_HESAP_SESSION_KEY]);
 
     return [
         'return' => 1,
@@ -276,6 +278,133 @@ function google_oauth_refresh_token_kaydet(
 }
 
 /**
+ * OAuth sonrasinda kullanicinin secebilecegi hesaplari session'dan alir.
+ * Refresh token bu response'a dahil edilmez.
+ *
+ * @return array<int, array{harici_kimlik: string, hesap_adi: ?string, yonetici: bool}>
+ */
+function google_oauth_bekleyen_hesaplari_al(): array
+{
+    $sahip_no = oturum_sahip_no();
+
+    if ($sahip_no === null || $sahip_no < 1) {
+        return [];
+    }
+
+    oturum_baslat();
+    $bekleyen = $_SESSION[GOOGLE_OAUTH_BEKLEYEN_HESAP_SESSION_KEY] ?? null;
+
+    if (
+        !is_array($bekleyen)
+        || (int) ($bekleyen['sahip_no'] ?? 0) !== $sahip_no
+        || !is_array($bekleyen['hesaplar'] ?? null)
+    ) {
+        return [];
+    }
+
+    return array_values(array_filter(
+        $bekleyen['hesaplar'],
+        static function ($hesap): bool {
+            return is_array($hesap)
+                && is_string($hesap['harici_kimlik'] ?? null)
+                && trim($hesap['harici_kimlik']) !== ''
+                && array_key_exists('yonetici', $hesap);
+        }
+    ));
+}
+
+/**
+ * Kullanici tarafindan secilen OAuth hesabini mevcut DB kayit mekanizmasina
+ * aktarir. Hesap listesi ve refresh token yalnizca sunucu session'inda tutulur.
+ *
+ * @param array<string, mixed>|null $parametreler Test edilebilirlik icin POST
+ * parametreleri; NULL verilirse $_POST kullanilir.
+ * @return array{return: int, mesaj: string}
+ */
+function google_oauth_hesap_sec(?array $parametreler = null): array
+{
+    $sahip_no = oturum_sahip_no();
+
+    if ($sahip_no === null || $sahip_no < 1) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Hesap seçmek için giriş yapmalısınız.',
+        ];
+    }
+
+    $parametreler = $parametreler ?? $_POST;
+    $harici_kimlik = google_oauth_tekil_parametre($parametreler, 'harici_kimlik');
+
+    if ($harici_kimlik === null) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Geçerli bir Google Ads hesabı seçmelisiniz.',
+        ];
+    }
+
+    oturum_baslat();
+    $bekleyen = $_SESSION[GOOGLE_OAUTH_BEKLEYEN_HESAP_SESSION_KEY] ?? null;
+
+    if (
+        !is_array($bekleyen)
+        || (int) ($bekleyen['sahip_no'] ?? 0) !== $sahip_no
+        || !is_string($bekleyen['refresh_token_sifreli'] ?? null)
+        || !is_array($bekleyen['hesaplar'] ?? null)
+    ) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Google Ads hesap seçimi artık geçerli değil.',
+        ];
+    }
+
+    $secili_hesap = null;
+
+    foreach ($bekleyen['hesaplar'] as $hesap) {
+        if (
+            is_array($hesap)
+            && (string) ($hesap['harici_kimlik'] ?? '') === $harici_kimlik
+        ) {
+            $secili_hesap = [
+                'harici_kimlik' => $harici_kimlik,
+                'hesap_adi' => $hesap['hesap_adi'] ?? null,
+                'yonetici' => (bool) ($hesap['yonetici'] ?? false),
+            ];
+            break;
+        }
+    }
+
+    if ($secili_hesap === null) {
+        return [
+            'return' => 0,
+            'mesaj' => 'Seçilen Google Ads hesabı bu OAuth oturumuna ait değil.',
+        ];
+    }
+
+    $refresh_token = null;
+
+    try {
+        $refresh_token = coz($bekleyen['refresh_token_sifreli']);
+
+        if (trim($refresh_token) === '') {
+            throw new RuntimeException('Google refresh token kullanılamadı.');
+        }
+
+        google_oauth_refresh_token_kaydet($sahip_no, $refresh_token, $secili_hesap);
+        unset($_SESSION[GOOGLE_OAUTH_BEKLEYEN_HESAP_SESSION_KEY]);
+    } catch (Throwable $hata) {
+        unset($refresh_token);
+        throw $hata;
+    }
+
+    unset($refresh_token);
+
+    return [
+        'return' => 1,
+        'mesaj' => 'Google Ads hesabı başarıyla bağlandı.',
+    ];
+}
+
+/**
  * Google OAuth callback'ini dogrular, token'i alir ve sifreli olarak kaydeder.
  *
  * @param array<string, mixed>|null $parametreler Test edilebilirlik icin
@@ -328,13 +457,12 @@ function google_oauth_donus(?array $parametreler = null): array
 
     try {
         $hesaplar = google_ads_hesaplarini_kesfet($refresh_token);
-        $secili_hesap = google_baglanti_hesabini_sec($hesaplar);
     } catch (Throwable $hata) {
         unset($refresh_token);
         throw $hata;
     }
 
-    if ($secili_hesap === null) {
+    if ($hesaplar === []) {
         unset($refresh_token);
 
         return [
@@ -343,12 +471,29 @@ function google_oauth_donus(?array $parametreler = null): array
         ];
     }
 
-    google_oauth_refresh_token_kaydet($sahip_no, $refresh_token, $secili_hesap);
+    $bekleyen_hesaplar = array_map(
+        static function (array $hesap): array {
+            return [
+                'harici_kimlik' => trim((string) ($hesap['harici_kimlik'] ?? '')),
+                'hesap_adi' => $hesap['hesap_adi'] ?? null,
+                'yonetici' => (bool) ($hesap['yonetici'] ?? false),
+            ];
+        },
+        $hesaplar
+    );
+
+    oturum_baslat();
+    $_SESSION[GOOGLE_OAUTH_BEKLEYEN_HESAP_SESSION_KEY] = [
+        'sahip_no' => $sahip_no,
+        'refresh_token_sifreli' => sifrele($refresh_token),
+        'hesaplar' => $bekleyen_hesaplar,
+    ];
 
     unset($refresh_token);
 
     return [
         'return' => 1,
-        'mesaj' => 'Google Ads hesabı başarıyla bağlandı.',
+        'mesaj' => 'Google Ads hesabı seçimi bekleniyor.',
+        'url' => 'index.php?islem=google-hesap-sec',
     ];
 }
