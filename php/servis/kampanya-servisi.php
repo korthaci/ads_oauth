@@ -907,14 +907,14 @@ function kampanya_olustur(array $girdiler): array
 }
 
 /**
- * Tek bir kampanyanin status alanini ENABLED veya PAUSED yapar (PROMPT-23).
+ * Tek bir kampanyanin status alanini ENABLED, PAUSED veya REMOVED yapar (PROMPT-23/24).
  *
  * Guvenlik akisi: girdi dogrulama -> oturum -> aktif baglanti -> TAZE manager
  * kontrolu (mutate oncesi; manager hesaba asla mutate denmez) -> kampanyanin
  * bu hesaba aidiyeti salt-okunur sorguyla dogrulanir (ID baska hesaba aitse
  * veya yoksa mutate HIC denenmez) -> tek update mutate (yalnizca status).
  *
- * Girdi: kampanya_id (zorunlu), hedef_durum (yalnizca 'ENABLED'/'PAUSED';
+ * Girdi: kampanya_id (zorunlu), hedef_durum (yalnizca 'ENABLED'/'PAUSED'/'REMOVED';
  * baska deger — buyuk/kucuk harf farkli dahil — kabul edilmez).
  *
  * @param array<string, mixed> $istek
@@ -926,10 +926,10 @@ function kampanya_durumunu_degistir(array $istek): array
         ? trim($istek['hedef_durum'])
         : '';
 
-    if ($hedef_durum !== 'ENABLED' && $hedef_durum !== 'PAUSED') {
+    if ($hedef_durum !== 'ENABLED' && $hedef_durum !== 'PAUSED' && $hedef_durum !== 'REMOVED') {
         return [
             'return' => 0,
-            'mesaj' => 'Hedef durum geçersiz; yalnızca ENABLED veya PAUSED kabul edilir.',
+            'mesaj' => 'Hedef durum geçersiz; yalnızca ENABLED, PAUSED veya REMOVED kabul edilir.',
         ];
     }
 
@@ -1032,6 +1032,25 @@ function kampanya_durumunu_degistir(array $istek): array
                 ];
             }
 
+            if ($hedef_durum === 'REMOVED') {
+                $kaldirma_onayi = is_string($istek['kaldirma_onayi'] ?? null)
+                    ? $istek['kaldirma_onayi']
+                    : '';
+
+                if ($kaldirma_onayi !== $ayrinti['name']) {
+                    $sonra = google_baglanmis_hesap_snapshot_al($sahip_no);
+
+                    return [
+                        'return' => 0,
+                        'mesaj' => 'Kaldırma işlemi için kampanya adını tam olarak yazmalısınız; kampanya kaldırılmadı.',
+                        'baglanmis_hesap_durumu' => google_baglanmis_hesap_durumunu_raporla(
+                            $once,
+                            $sonra
+                        ),
+                    ];
+                }
+            }
+
             $sonuc = google_ads_kampanya_durumunu_degistir(
                 $refresh_token,
                 $customer_id,
@@ -1070,7 +1089,9 @@ function kampanya_durumunu_degistir(array $istek): array
             . 'AND `harici_kampanya_id` = :kampanya_id'
         );
         $guncelle->execute([
-            'durum' => $hedef_durum === 'ENABLED' ? 'yayinda' : 'duraklatildi',
+            'durum' => $hedef_durum === 'ENABLED'
+                ? 'yayinda'
+                : ($hedef_durum === 'REMOVED' ? 'kaldirildi' : 'duraklatildi'),
             'hesap_no' => (int) $baglanti['no'],
             'platform' => 'google',
             'kampanya_id' => $sonuc['kampanya_id'],
@@ -1086,7 +1107,9 @@ function kampanya_durumunu_degistir(array $istek): array
             ? 'Kampanya yayına alındı (ENABLED). Reklamların yayına girmesi '
                 . 'Google tarafında birkaç dakika sürebilir; gerçek harcama '
                 . 'başlamıştır.'
-            : 'Kampanya duraklatıldı (PAUSED); harcama durduruldu.',
+            : ($hedef_durum === 'REMOVED'
+                ? 'Kampanya kalıcı olarak kaldırıldı (REMOVED); bu işlem geri alınamaz.'
+                : 'Kampanya duraklatıldı (PAUSED); harcama durduruldu.'),
         'kampanya_kaynagi' => $sonuc['kampanya_kaynagi'],
         'kampanya_id' => $sonuc['kampanya_id'],
         'kampanya_adi' => $ayrinti['name'],

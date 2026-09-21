@@ -876,9 +876,9 @@ function google_ads_kampanya_ayrintilari_al(
 }
 
 /**
- * Tek bir kampanyanin status alanini degistirir (PROMPT-23).
+ * Tek bir kampanyanin status alanini degistirir (PROMPT-23/24).
  *
- * Yalnizca 'ENABLED' veya 'PAUSED' kabul edilir. Google Ads API dogrulamasi
+ * Yalnizca 'ENABLED', 'PAUSED' veya 'REMOVED' kabul edilir. Google Ads API dogrulamasi
  * (vendor v25, tahmin yok): CampaignServiceClient (Services\Client altinda)
  * MutateCampaignsRequest::build($customerId, $operations) alir; yanit
  * MutateCampaignsResponse::getResults() -> MutateCampaignResult::getResourceName()
@@ -903,9 +903,9 @@ function google_ads_kampanya_durumunu_degistir(
         throw new GoogleAdsKesifHatasi('Kampanya ID geçersiz.', 'girdi');
     }
 
-    if ($hedef_durum !== 'ENABLED' && $hedef_durum !== 'PAUSED') {
+    if ($hedef_durum !== 'ENABLED' && $hedef_durum !== 'PAUSED' && $hedef_durum !== 'REMOVED') {
         throw new GoogleAdsKesifHatasi(
-            'Hedef durum yalnızca ENABLED veya PAUSED olabilir.',
+            'Hedef durum yalnızca ENABLED, PAUSED veya REMOVED olabilir.',
             'girdi'
         );
     }

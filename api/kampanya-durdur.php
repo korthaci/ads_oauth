@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Kampanya durumunu ENABLED veya PAUSED yapar.
+ * Kampanya durumunu ENABLED, PAUSED veya REMOVED yapar.
  * Bu dosya yalnizca api/index.php tarafindan include edilir; is mantigi
  * php/servis/kampanya-servisi.php icindedir.
  */

@@ -1554,6 +1554,66 @@ Deploy sonrası Kort kontrolü: `Cache-Control: no-store` header'ı, yeni kampan
 
 Geçici vendor doğrulama ve sentetik test dosyaları final doğrulama sonrasında çalışma ağacından kaldırılmıştır; canlı doğrulama Kort'a bağlıdır.
 
+## PROMPT-24 — Kampanya kaldırma butonu ve liste filtresi (uygulandı; canlı test bekliyor)
+
+### Görev A — `REMOVED` / Kaldır
+
+- [x] `kampanya_durumunu_degistir()` ve Google Ads adapter'ı `ENABLED`/`PAUSED` yanında
+  `REMOVED` hedefini de kabul ediyor. Mevcut oturum, aktif bağlantı, taze non-manager
+  kontrolü ve kampanyanın bağlı customer hesabına ait olduğunu doğrulayan salt-okunur
+  sorgu akışı değiştirilmedi; `REMOVED` için de mutate öncesinde aynen çalışıyor.
+- [x] `REMOVED` isteği, servis katmanında kampanya adının `kaldirma_onayi` alanında tam
+  eşleşmesini zorunlu kılıyor. Tam ad gelmezse Google mutate hiç çağrılmıyor. Böylece
+  onay yalnızca frontend'e bırakılmadı; diğer hedef durumların akışı değiştirilmedi.
+- [x] `tema/panel/kampanyalarim.php` içinde `REMOVED` olmayan her satıra **Kaldır**
+  butonu eklendi. Onay kutusu kampanya adının eksiksiz yazılmasını ister ve açıkça
+  **"Bu işlem GERİ ALINAMAZ. Kampanya kalıcı olarak kaldırılacak."** uyarısını gösterir.
+  Zaten `REMOVED` olan satırlarda işlem butonu yoktur. Yerel yansıma başarılı mutate
+  sonrasında `kaldirildi` olarak yazılır.
+
+### Görev B — Varsayılan liste filtresi
+
+- [x] Kampanyalar sayfasına **Kaldırılanlar hariç** (varsayılan) ve **Tümü** seçenekleri
+  eklendi.
+- [x] Filtre yalnızca frontend'de uygulanıyor: `kampanya-listele` API'si tam listeyi
+  döndürüyor, `window.ks` içinde korunuyor; seçim değişince sayfa yenilenmeden tablo
+  yeniden çiziliyor. Backend'e filtre parametresi eklenmedi.
+
+### PROMPT-24 deploy listesi
+
+- `api/kampanya-durdur.php`
+- `php/baglayici/google-ads-baglayici.php`
+- `php/servis/kampanya-servisi.php`
+- `tema/panel/kampanyalarim.php`
+- `tests/prompt-24-kampanya-kaldirma-testi.php` (sentetik doğrulama için)
+- `md/DURUM.md`
+
+Şema migration'ı gerekmez: `kampanyalar.durum` mevcut serbest `varchar(20)` alanıdır.
+
+### Doğrulama ve Kort canlı testi
+
+- `php -l` ile değişen PHP dosyaları ve mümkünse vendor dışı tüm PHP dosyaları
+  doğrulanmalı; ayrıca `php tests/prompt-24-kampanya-kaldirma-testi.php` çalıştırılmalı.
+- Deploy sonrası Kampanyalarım panelinde düşük bütçeli ve artık kullanılmayacak gerçek
+  test kampanyalarından yalnızca dikkatle seçilen biri kullanılmalı. Önerilen adaylar:
+  `24268992914` veya `24276234886`; kampanya seçimi deploy öncesi Google Ads'te tekrar
+  kontrol edilmelidir.
+- Kort, seçilen kampanyada **Kaldır** onay kutusunun kampanya adı eksik veya farklı
+  yazıldığında pasif kaldığını, tam ad yazılınca aktif olduğunu ve geri alınamaz uyarıyı
+  göstermesini doğrulamalı. Onaydan sonra Google Ads ve panelde durumun `REMOVED`
+  / `Kaldırıldı` olduğunu kontrol etmeli.
+- Ardından varsayılan **Kaldırılanlar hariç** filtresinde kampanyanın görünmediği,
+  **Tümü** seçilince sayfa yenilenmeden `Kaldırıldı` olarak göründüğü doğrulanmalı.
+  **REMOVED işlemi geri alınamaz; kullanılmakta olan veya yanlış seçilmiş bir kampanya
+  kesinlikle seçilmemelidir.**
+
+### PROMPT-22 açık hatırlatması
+
+PROMPT-22'nin çoklu kullanıcı izolasyon testi Kort tarafından hâlâ yapılmadı ve geçici
+`php/teshis-log.php` production'da hâlâ aktif. Bu madde PROMPT-24 kapsamı dışındadır;
+unutulmamalıdır. Kort, uygun bir zamanda Firefox izolasyon/cache testini yapmalı ve
+test tamamlanınca teşhis logunun kaldırılmasını ayrıca ele almalıdır.
+
 ## PROMPT-23.9 — Public kayıt + manuel `active` onayı (tamamlandı)
 
 ### ÖNCELİKLİ: production migration sonrası Kort hesabını etkinleştir
