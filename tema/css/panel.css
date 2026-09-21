@@ -16,6 +16,7 @@ body { margin: 0; background: #f5f7fb; }
 .panel-main button:hover:not(:disabled), .panel-main button:focus:not(:disabled) { background: #0e4e83; }
 .panel-main button:disabled { opacity: .55; cursor: not-allowed; }
 .form-field { margin: 0 0 18px; }
+.panel-main .button-danger { padding: 9px 14px; border: 0; border-radius: 4px; background: rgb(218, 50, 50); color: #fff; cursor: pointer; font-weight: 600; }
 .hint { display: block; max-width: 680px; margin-top: 5px; color: #687386; font-size: .9rem; line-height: 1.4; }
 .status-message { min-height: 1.5em; }
 .alert { padding: 12px 14px; border-radius: 5px; margin: 12px 0; }

@@ -72,7 +72,7 @@ document.querySelectorAll('.google-oauth-baslat-dugmesi').forEach(function (dugm
 });
 </script>
 
-<p><a href="index.php?islem=kampanya-sihirbazi">Kampanya sihirbazı ile kampanya oluştur</a></p>
+<p><a class="button-danger" href="index.php?islem=kampanya-sihirbazi">Kampanya sihirbazı ile kampanya oluştur</a></p>
 
 <p><a href="index.php?islem=cikis">Çıkış yap</a></p>
 <?php require __DIR__ . '/../layout/footer.php'; ?>
