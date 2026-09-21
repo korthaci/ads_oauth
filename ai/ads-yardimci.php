@@ -16,9 +16,16 @@ require_once dirname(__DIR__) . '/php/config.php';
  */
 function ads_yardimci_onerisi(array $veriler): array
 {
+    $baslangic = microtime(true);
+    $istek_id = bin2hex(random_bytes(8));
     $sahip_no = oturum_sahip_no();
 
     if ($sahip_no === null || $sahip_no < 1) {
+        ads_yardimci_logla('oturum_yok', [
+            'istek_id' => $istek_id,
+            'sure_ms' => ads_yardimci_sure_ms($baslangic),
+        ]);
+
         return [
             'return' => 0,
             'mesaj' => 'AI önerisi için giriş yapmanız gerekir.',
@@ -28,6 +35,12 @@ function ads_yardimci_onerisi(array $veriler): array
     $brief = trim((string) ($veriler['brief'] ?? ''));
 
     if ($brief === '' || mb_strlen($brief) > 4000) {
+        ads_yardimci_logla('brief_gecersiz', [
+            'istek_id' => $istek_id,
+            'brief_karakter' => mb_strlen($brief),
+            'sure_ms' => ads_yardimci_sure_ms($baslangic),
+        ]);
+
         return [
             'return' => 0,
             'mesaj' => 'AI isteği boş olamaz ve 4000 karakteri geçemez.',
@@ -36,9 +49,21 @@ function ads_yardimci_onerisi(array $veriler): array
 
     $provider = strtolower(trim(config('AI_PROVIDER')));
     $model = trim(config('AI_MODEL'));
-    $api_key = trim(config('AI_API_KEY'));
+    $api_key = ads_yardimci_config_degeri('AI_API_KEY');
+
+    if ($provider === 'deepseek' && $api_key === '') {
+        $api_key = ads_yardimci_config_degeri('DEEPSEEK_API_KEY');
+    }
 
     if ($provider === '' || $model === '' || $api_key === '') {
+        ads_yardimci_logla('ayar_eksik', [
+            'istek_id' => $istek_id,
+            'provider' => $provider !== '' ? $provider : 'bos',
+            'model' => $model !== '' ? $model : 'bos',
+            'api_key' => $api_key !== '' ? 'var' : 'bos',
+            'sure_ms' => ads_yardimci_sure_ms($baslangic),
+        ]);
+
         return [
             'return' => 0,
             'mesaj' => 'AI ayarları tamamlanmamış. AI_PROVIDER, AI_MODEL ve AI_API_KEY kontrol edilmelidir.',
@@ -54,8 +79,16 @@ function ads_yardimci_onerisi(array $veriler): array
         . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 
     try {
-        $ham_cevap = ads_yardimci_ai_cagrisi($provider, $model, $api_key, $system, $user);
+        $ham_cevap = ads_yardimci_ai_cagrisi($provider, $model, $api_key, $system, $user, $istek_id);
         $oneri = ads_yardimci_json_coz_ve_normalize_et($ham_cevap);
+
+        ads_yardimci_logla('oneri_basari', [
+            'istek_id' => $istek_id,
+            'provider' => $provider,
+            'model' => $model,
+            'yanit_karakter' => mb_strlen($ham_cevap),
+            'sure_ms' => ads_yardimci_sure_ms($baslangic),
+        ]);
 
         return [
             'return' => 1,
@@ -63,10 +96,28 @@ function ads_yardimci_onerisi(array $veriler): array
             'oneri' => $oneri,
         ];
     } catch (Throwable $hata) {
+        ads_yardimci_logla('oneri_hatasi', [
+            'istek_id' => $istek_id,
+            'provider' => $provider,
+            'model' => $model,
+            'hata_sinifi' => get_class($hata),
+            'hata' => ads_yardimci_hata_mesajini_kisalt($hata->getMessage()),
+            'sure_ms' => ads_yardimci_sure_ms($baslangic),
+        ]);
+
         return [
             'return' => 0,
             'mesaj' => 'AI önerisi alınamadı. Lütfen daha sonra tekrar deneyin.',
         ];
+    }
+}
+
+function ads_yardimci_config_degeri(string $anahtar): string
+{
+    try {
+        return trim(config($anahtar));
+    } catch (Throwable) {
+        return '';
     }
 }
 
@@ -145,23 +196,33 @@ function ads_yardimci_ai_cagrisi(
     string $model,
     string $api_key,
     string $system,
-    string $user
+    string $user,
+    string $istek_id = ''
 ): string {
     $payload = null;
     $headers = ['Content-Type: application/json'];
 
-    if ($provider === 'openai') {
+    if ($provider === 'openai' || $provider === 'deepseek') {
         $endpoint = 'https://api.openai.com/v1/chat/completions';
+
+        if ($provider === 'deepseek') {
+            $endpoint = 'https://api.deepseek.com/chat/completions';
+        }
+
         $payload = [
             'model' => $model,
             'temperature' => 0.2,
-            'max_tokens' => 3000,
-            'response_format' => ['type' => 'json_object'],
+            'max_tokens' => $provider === 'deepseek' ? 16384 : 3000,
             'messages' => [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => $user],
             ],
         ];
+
+        if ($provider === 'openai') {
+            $payload['response_format'] = ['type' => 'json_object'];
+        }
+
         $headers[] = 'Authorization: Bearer ' . $api_key;
     } elseif ($provider === 'google') {
         $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/'
@@ -178,7 +239,7 @@ function ads_yardimci_ai_cagrisi(
             ],
         ];
     } else {
-        throw new RuntimeException('Desteklenmeyen AI provider.');
+        throw new RuntimeException('Desteklenmeyen AI provider: ' . $provider);
     }
 
     $json_payload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -194,7 +255,7 @@ function ads_yardimci_ai_cagrisi(
         CURLOPT_HTTPHEADER => $headers,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 60,
+        CURLOPT_TIMEOUT => $provider === 'deepseek' ? 240 : 60,
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
     ]);
@@ -202,19 +263,40 @@ function ads_yardimci_ai_cagrisi(
     $result = curl_exec($ch);
     $curl_error = curl_error($ch);
     $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_errno = curl_errno($ch);
+    $response_karakter = is_string($result) ? strlen($result) : 0;
     curl_close($ch);
 
+    ads_yardimci_logla('provider_yaniti', [
+        'istek_id' => $istek_id !== '' ? $istek_id : 'bilinmiyor',
+        'provider' => $provider,
+        'model' => $model,
+        'http' => $http_code,
+        'curl_errno' => $curl_errno,
+        'curl_hata' => $curl_error !== '' ? ads_yardimci_hata_mesajini_kisalt($curl_error) : 'yok',
+        'yanit_karakter' => $response_karakter,
+    ]);
+
     if ($result === false || $curl_error !== '') {
-        throw new RuntimeException('AI bağlantı hatası.');
+        throw new RuntimeException(
+            'AI bağlantı hatası (curl_errno=' . $curl_errno . ', http=' . $http_code . ').'
+        );
     }
 
     $response = json_decode($result, true);
+    $json_hata = json_last_error_msg();
 
     if (!is_array($response) || $http_code >= 400) {
-        throw new RuntimeException('AI provider hata döndürdü.');
+        $provider_hatasi = ads_yardimci_provider_hata_mesajini_al($response);
+        throw new RuntimeException(
+            'AI provider hata döndürdü (http=' . $http_code
+            . ', json=' . $json_hata
+            . ($provider_hatasi !== '' ? ', provider=' . $provider_hatasi : '')
+            . ').'
+        );
     }
 
-    if ($provider === 'openai') {
+    if ($provider === 'openai' || $provider === 'deepseek') {
         $content = $response['choices'][0]['message']['content'] ?? null;
     } else {
         $content = $response['candidates'][0]['content']['parts'][0]['text'] ?? null;
@@ -225,6 +307,69 @@ function ads_yardimci_ai_cagrisi(
     }
 
     return $content;
+}
+
+function ads_yardimci_sure_ms(float $baslangic): int
+{
+    return (int) round((microtime(true) - $baslangic) * 1000);
+}
+
+/**
+ * Teşhis logunda prompt, brief, API key ve ham provider yanıtı tutulmaz.
+ * Kayıt hem PHP error_log'a hem de sistem geçici dizinindeki ayrı AI loguna yazılır.
+ *
+ * @param array<string, scalar> $alanlar
+ */
+function ads_yardimci_logla(string $olay, array $alanlar = []): void
+{
+    $parcalar = ['ads_ai', $olay];
+
+    foreach ($alanlar as $anahtar => $deger) {
+        $parcalar[] = $anahtar . '=' . str_replace(["\r", "\n", '|'], ' ', (string) $deger);
+    }
+
+    $satir = implode(' | ', $parcalar) . PHP_EOL;
+
+    error_log(rtrim($satir));
+    @file_put_contents(
+        sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ads-oauth-ai.log',
+        $satir,
+        FILE_APPEND | LOCK_EX
+    );
+}
+
+function ads_yardimci_hata_mesajini_kisalt(string $mesaj): string
+{
+    $mesaj = preg_replace('/(Bearer\s+)[^\s]+/iu', '$1[redacted]', $mesaj) ?? $mesaj;
+    $mesaj = preg_replace('/(key=)[^&\s]+/iu', '$1[redacted]', $mesaj) ?? $mesaj;
+
+    return mb_substr(trim($mesaj), 0, 300);
+}
+
+/**
+ * Provider hata gövdesinden yalnızca kısa ve güvenli bir hata metni alır.
+ *
+ * @param array<string, mixed>|null $response
+ */
+function ads_yardimci_provider_hata_mesajini_al(?array $response): string
+{
+    if (!is_array($response)) {
+        return '';
+    }
+
+    $adaylar = [
+        $response['error']['message'] ?? null,
+        $response['error']['status'] ?? null,
+        $response['message'] ?? null,
+    ];
+
+    foreach ($adaylar as $aday) {
+        if (is_scalar($aday) && trim((string) $aday) !== '') {
+            return ads_yardimci_hata_mesajini_kisalt((string) $aday);
+        }
+    }
+
+    return '';
 }
 
 /**
