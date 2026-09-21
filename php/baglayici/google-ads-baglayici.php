@@ -1338,6 +1338,32 @@ function google_ads_kampanya_olustur(
         }
     }
 
+    $negatif_anahtar_kelimeler = array_values(
+        is_array($plan['negatif_anahtar_kelimeler'] ?? null)
+            ? $plan['negatif_anahtar_kelimeler']
+            : []
+    );
+
+    if (count($negatif_anahtar_kelimeler) > 20) {
+        throw new GoogleAdsKesifHatasi(
+            'Negatif anahtar kelime listesi en fazla 20 adet olabilir.',
+            'girdi'
+        );
+    }
+
+    foreach ($negatif_anahtar_kelimeler as $negatif_kelime) {
+        if (
+            !is_string($negatif_kelime)
+            || trim($negatif_kelime) === ''
+            || mb_strlen(trim($negatif_kelime)) > 80
+        ) {
+            throw new GoogleAdsKesifHatasi(
+                'Negatif anahtar kelime değeri geçersiz.',
+                'girdi'
+            );
+        }
+    }
+
     // PROMPT-21: opsiyonel hariç tutulan konum kaynakları — her biri geçerli
     // bir geoTargetConstant kaynak adı olmalı (kullanıcının bilinçli seçimi;
     // sessiz best-match yok).
@@ -1469,6 +1495,53 @@ function google_ads_kampanya_olustur(
                     )
             ));
             $islemler[] = $haric_islemi;
+        }
+
+        // Kampanya seviyesindeki negatif anahtar kelimeler CampaignCriterion
+        // olarak oluşturulur. Düz metin broad, "..." phrase ve [...] exact
+        // eşleme olarak yorumlanır; pozitif kelimelerin AdGroupCriterion
+        // akışından bağımsızdır.
+        foreach ($negatif_anahtar_kelimeler as $negatif_kelime) {
+            $negatif_kelime = trim($negatif_kelime);
+            $esleme_tipi = KeywordMatchType::BROAD;
+
+            if (
+                mb_strlen($negatif_kelime) >= 2
+                && str_starts_with($negatif_kelime, '"')
+                && str_ends_with($negatif_kelime, '"')
+            ) {
+                $esleme_tipi = KeywordMatchType::PHRASE;
+                $negatif_kelime = trim(mb_substr($negatif_kelime, 1, -1));
+            } elseif (
+                mb_strlen($negatif_kelime) >= 2
+                && str_starts_with($negatif_kelime, '[')
+                && str_ends_with($negatif_kelime, ']')
+            ) {
+                $esleme_tipi = KeywordMatchType::EXACT;
+                $negatif_kelime = trim(mb_substr($negatif_kelime, 1, -1));
+            }
+
+            if ($negatif_kelime === '') {
+                throw new GoogleAdsKesifHatasi(
+                    'Negatif anahtar kelime değeri boş olamaz.',
+                    'girdi'
+                );
+            }
+
+            $negatif_islemi = new MutateOperation();
+            $negatif_islemi->setCampaignCriterionOperation(
+                (new CampaignCriterionOperation())->setCreate(
+                    (new CampaignCriterion())
+                        ->setCampaign($on_ek . '/campaigns/-2')
+                        ->setNegative(true)
+                        ->setKeyword(
+                            (new KeywordInfo())
+                                ->setText($negatif_kelime)
+                                ->setMatchType($esleme_tipi)
+                        )
+                )
+            );
+            $islemler[] = $negatif_islemi;
         }
 
         $dil_islemi = new MutateOperation();

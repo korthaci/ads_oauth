@@ -403,15 +403,15 @@ foreach ([
     "setResourceName(\$on_ek . '/campaigns/-2')" => 1,
     "setResourceName(\$on_ek . '/adGroups/-3')" => 1,
     "'/campaignBudgets/-1'" => 2,
-    "'/campaigns/-2'" => 5,
+    "'/campaigns/-2'" => 6,
     "'/adGroups/-3'" => 3,
     "use Google\\Ads\\GoogleAds\\V25\\Enums\\EuPoliticalAdvertisingStatusEnum\\EuPoliticalAdvertisingStatus;" => 1,
     "EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING" => 1,
     "setContainsEuPoliticalAdvertising(" => 1,
     "\$sonuclar = \$yanit->getMutateOperationResponses();" => 1,
-    "->getResults()" => 1,
-    '->setNegative(true)' => 1,
-    '->setEndDateTime(' => 1,
+    "->getResults()" => 2,
+    '->setNegative(true)' => 2,
+    '->setEndDateTime(' => 2,
     "'durum' => 'tek'" => 1,
     "'durum' => 'belirsiz'" => 1,
     'Hariç tutulan konum kaynak adı geçersiz.' => 1,
@@ -639,7 +639,6 @@ foreach ([
     'haric_konum_kaynak_metin' => 1,
     'Aynı konum hem hedef hem hariç tutulan olamaz' => 1,
     "'haric_konum_kaynaklari' =>" => 1,
-    "'bitis_tarihi' =>" => 1,
 ] as $desen => $beklenen_adet) {
     $adet = substr_count($servis_kod, $desen);
 

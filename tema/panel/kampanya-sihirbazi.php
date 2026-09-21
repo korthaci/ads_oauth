@@ -10,7 +10,8 @@ require __DIR__ . '/../layout/header.php';
     olarak oluşturulur; ayrı bir onay adımı yapılmadan yayına alınmaz.
 </p>
 
-<section id="ads-ai-yardimci" style="border: 1px solid #c8c8c8; padding: 14px; margin: 16px 0;">
+<div class="campaign-builder">
+<section id="ads-ai-yardimci" class="ai-helper-panel">
     <h2>Ads AI yardımcısı</h2>
     <p>Ne reklamı vermek istediğinizi yazın. AI yalnızca öneri üretir; kampanya oluşturmaz veya yayınlamaz.</p>
     <p>
@@ -28,14 +29,15 @@ require __DIR__ . '/../layout/header.php';
         <p><strong>Kampanya amacı:</strong> <span id="ai-kampanya-amaci"></span></p>
         <p><strong>Hedef bölge:</strong> <span id="ai-hedef-konum"></span></p>
         <div id="ai-oneri-listeleri"></div>
-        <small>Negatif anahtar kelimeler öneri olarak gösterilir; mevcut formda bu alan bulunmadığı için otomatik uygulanmaz.</small>
+        <small>Önerileri kontrol edin; AI yalnızca forma öneri aktarır, Google Ads kampanyasını sizin form gönderiminiz oluşturur.</small>
         <p>
             <button type="button" id="ai-onerileri-uygula">Önerileri forma uygula</button>
         </p>
     </div>
 </section>
 
-<form id="kampanya-sihirbazi-form">
+<div class="campaign-form-column">
+<form id="kampanya-sihirbazi-form" class="campaign-form">
     <p>
         <label for="web_sitesi">Web sitesi (reklamın yönlendireceği adres)</label><br>
         <input type="text" id="web_sitesi" name="web_sitesi" required autocomplete="off"
@@ -67,12 +69,18 @@ Hemen yayına alın
                   Örnek : Bu reklam açıklaması test için yapılmıştır,
 Bu reklam açıklaması test için yapılmıştır 2
     </p>
-    <p>
+    <p class="form-field">
         <label for="anahtar_kelimeler">Anahtar kelimeler (en az 1; virgülle ayırın)</label><br>
         <textarea id="anahtar_kelimeler" name="anahtar_kelimeler" rows="3" required
                   placeholder="örnek kelime 1, örnek kelime 2"></textarea>
         <small class="hint">Müşterilerin arayabileceği kelimeleri her satıra veya virgülle ayırarak yazın.</small>
                   Örnek : web sitesi yap,web sitesi oluştur
+    </p>
+    <p class="form-field keyword-negative-field">
+        <label for="negatif_anahtar_kelimeler">Negatif anahtar kelimeler (opsiyonel; en fazla 20)</label><br>
+        <textarea id="negatif_anahtar_kelimeler" name="negatif_anahtar_kelimeler" rows="3"
+                  placeholder="ücretsiz, kurs, &quot;iş ilanı&quot;, [staj]"></textarea>
+        <small class="hint">Reklamınızın gösterilmesini istemediğiniz aramaları yazın. Her satıra veya virgülle ayırın; düz metin geniş, &quot;kelime&quot; sıralı, [kelime] tam eşleme kullanır.</small>
     </p>
     <p>
         <label for="gunluk_butce">Günlük bütçe (TL)</label><br>
@@ -101,7 +109,12 @@ Bu reklam açıklaması test için yapılmıştır 2
         kampanyanın yaklaşık olarak toplam bütçe / günlük bütçe gün sonra otomatik
         olarak durmasını sağlar (bitiş tarihi atanır).</small>
     </p>
-    <div id="konum-secim" style="display: none; border: 1px solid #c8c8c8; padding: 10px; margin: 10px 0;"></div>
+    <p class="form-field">
+        <label for="bitis_tarihi">Bitiş tarihi (opsiyonel)</label><br>
+        <input type="date" id="bitis_tarihi" name="bitis_tarihi">
+        <small class="hint">Kampanya seçtiğiniz günün sonunda otomatik olarak durur. Boş bırakırsanız toplam bütçe girildiğinde yaklaşık süre hesabı kullanılır.</small>
+    </p>
+    <div id="konum-secim" class="location-selection" style="display: none;"></div>
     <input type="hidden" name="hedef_konum_resource_name" value="">
     <input type="hidden" name="hedef_konum_kaynak_metin" value="">
     <input type="hidden" name="haric_konum_resource_name" value="">
@@ -111,6 +124,8 @@ Bu reklam açıklaması test için yapılmıştır 2
     </p>
     <p id="sihirbaz-mesaj" role="status" aria-live="polite"></p>
 </form>
+</div>
+</div>
 
 <p><a href="index.php">Panele dön</a></p>
 
@@ -265,7 +280,8 @@ Bu reklam açıklaması test için yapılmıştır 2
             haric_konumlar: 'haric_konumlar',
             basliklar: 'basliklar',
             aciklamalar: 'aciklamalar',
-            anahtar_kelimeler: 'anahtar_kelimeler'
+            anahtar_kelimeler: 'anahtar_kelimeler',
+            negatif_anahtar_kelimeler: 'negatif_anahtar_kelimeler'
         };
 
         Object.keys(alanlar).forEach(function (oneriAlani) {

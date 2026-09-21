@@ -461,10 +461,11 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi, string $etiket = 'Günl�
  * Kurallar (PROMPT-20 §4, PROMPT-21): web sitesi URL (https:// eksikse eklenir),
  * kampanya adi 1-255 karakter, basliklar 3-15 adet ve her biri 30 karakter,
  * aciklamalar 2-4 adet ve her biri 90 karakter, anahtar kelimeler 1-20 adet ve
- * her biri 80 karakter, gunluk butce pozitif sayi, hedef konum 1-100 karakter,
+ * negatif anahtar kelimeler 0-20 adet ve her biri 80 karakter, gunluk butce pozitif sayi,
+ * hedef konum 1-100 karakter,
  * haric tutulan konumlar 0-20 adet (opsiyonel; her biri 1-100 karakter),
  * toplam butce opsiyonel pozitif sayi (gunluk butceden kucukse bitis tarihi
- * hesaplarken reddedilir).
+ * hesaplarken reddedilir), bitis tarihi opsiyonel ve bugun/ileri tarih olmalidir.
  *
  * @return array{
  *     kampanya_adi: string,
@@ -472,11 +473,13 @@ function kampanya_butcesini_microsa_cevir(mixed $girdi, string $etiket = 'Günl�
  *     basliklar: array<int, string>,
  *     aciklamalar: array<int, string>,
  *     anahtar_kelimeler: array<int, string>,
+ *     negatif_anahtar_kelimeler: array<int, string>,
  *     butce_micros: int,
  *     gunluk_butce_tl: string,
  *     hedef_konum: string,
  *     haric_konumlar: list<string>,
- *     toplam_butce_micros: ?int
+ *     toplam_butce_micros: ?int,
+ *     bitis_tarihi: ?string
  * }
  *
  * @throws InvalidArgumentException
@@ -578,6 +581,38 @@ function kampanya_girdilerini_dogrula(array $girdiler): array
         }
     }
 
+    $negatif_anahtar_kelimeler = kampanya_metnini_listeye_ayir(
+        (string) ($girdiler['negatif_anahtar_kelimeler'] ?? '')
+    );
+
+    if (count($negatif_anahtar_kelimeler) > 20) {
+        throw new InvalidArgumentException(
+            'En fazla 20 negatif anahtar kelime kabul edilir.'
+        );
+    }
+
+    foreach ($negatif_anahtar_kelimeler as $kelime) {
+        if (mb_strlen($kelime) > 80) {
+            throw new InvalidArgumentException(
+                'Negatif anahtar kelimeler en fazla 80 karakter olabilir.'
+            );
+        }
+    }
+
+    $pozitif_kelime_indeksi = [];
+
+    foreach ($anahtar_kelimeler as $kelime) {
+        $pozitif_kelime_indeksi[mb_strtolower(trim($kelime), 'UTF-8')] = true;
+    }
+
+    foreach ($negatif_anahtar_kelimeler as $kelime) {
+        if (isset($pozitif_kelime_indeksi[mb_strtolower(trim($kelime), 'UTF-8')])) {
+            throw new InvalidArgumentException(
+                'Aynı kelime hem pozitif hem negatif anahtar kelime olamaz: ' . $kelime
+            );
+        }
+    }
+
     $butce_micros = kampanya_butcesini_microsa_cevir(
         $girdiler['gunluk_butce'] ?? null
     );
@@ -622,17 +657,45 @@ function kampanya_girdilerini_dogrula(array $girdiler): array
         ? null
         : kampanya_butcesini_microsa_cevir($toplam_butce_metni, 'Toplam bütçe');
 
+    $bitis_tarihi = trim((string) ($girdiler['bitis_tarihi'] ?? ''));
+
+    if ($bitis_tarihi !== '') {
+        $tarih = DateTimeImmutable::createFromFormat('!Y-m-d', $bitis_tarihi);
+        $tarih_hatalari = DateTimeImmutable::getLastErrors();
+
+        if (
+            $tarih === false
+            || ($tarih_hatalari !== false
+                && ($tarih_hatalari['warning_count'] > 0 || $tarih_hatalari['error_count'] > 0))
+            || $tarih->format('Y-m-d') !== $bitis_tarihi
+        ) {
+            throw new InvalidArgumentException(
+                'Bitiş tarihi geçerli bir tarih olmalıdır (YYYY-MM-DD).'
+            );
+        }
+
+        if ($tarih < new DateTimeImmutable('today')) {
+            throw new InvalidArgumentException(
+                'Bitiş tarihi bugün veya daha ileri bir tarih olmalıdır.'
+            );
+        }
+    } else {
+        $bitis_tarihi = null;
+    }
+
     return [
         'kampanya_adi' => $kampanya_adi,
         'web_sitesi' => $web_sitesi,
         'basliklar' => $basliklar,
         'aciklamalar' => $aciklamalar,
         'anahtar_kelimeler' => $anahtar_kelimeler,
+        'negatif_anahtar_kelimeler' => $negatif_anahtar_kelimeler,
         'butce_micros' => $butce_micros,
         'gunluk_butce_tl' => number_format($butce_micros / 1000000, 2, '.', ''),
         'hedef_konum' => $hedef_konum,
         'haric_konumlar' => $haric_konumlar,
         'toplam_butce_micros' => $toplam_butce_micros,
+        'bitis_tarihi' => $bitis_tarihi,
     ];
 }
 
@@ -820,12 +883,11 @@ function kampanya_olustur(array $girdiler): array
             ];
         }
 
-        // PROMPT-21 §3: yaklaşık toplam bütçe -> bitiş tarihi (kesin harcama
-        // garantisi değildir; kampanyanın belirli bir tarihte otomatik durmasını
-        // sağlar). Günlük bütçeden küçük toplam bütçe reddedilir.
-        $bitis_tarihi = null;
+        // Açıkça girilen tarih önceliklidir. Tarih boş bırakılırsa mevcut
+        // toplam bütçe -> yaklaşık bitiş tarihi davranışı korunur.
+        $bitis_tarihi = $plan['bitis_tarihi'];
 
-        if ($plan['toplam_butce_micros'] !== null) {
+        if ($bitis_tarihi === null && $plan['toplam_butce_micros'] !== null) {
             try {
                 $bitis_tarihi = kampanya_bitis_tarihi_hesapla(
                     date('Y-m-d'),
@@ -849,6 +911,7 @@ function kampanya_olustur(array $girdiler): array
             'basliklar' => $plan['basliklar'],
             'aciklamalar' => $plan['aciklamalar'],
             'anahtar_kelimeler' => $plan['anahtar_kelimeler'],
+            'negatif_anahtar_kelimeler' => $plan['negatif_anahtar_kelimeler'],
             'web_sitesi' => $plan['web_sitesi'],
         ]);
     } catch (GoogleAdsKesifHatasi $hata) {
