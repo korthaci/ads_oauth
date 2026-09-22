@@ -14,7 +14,30 @@ GitHub: https://github.com/korthaci/ads_oauth
 > **Güncelleme sorumluluğu kod yazıcı AI'ye (Cline/Requesty) aittir.** Claude bu dosyayı
 > artık düzenlemez, sadece yeni prompt hazırlarken referans olarak okur.
 
-**Son güncelleme:** 2026-09-21
+**Son güncelleme:** 2026-09-22
+
+### 2026-09-22 — PROMPT-25 JavaScript/CSS ayrıştırması ve Google Ads tamamlanması
+
+- Dört panel sayfasındaki inline JavaScript, davranış ve endpoint'ler korunarak
+  assets/js/anasayfa.js, assets/js/hesap-baglan.js,
+  assets/js/kampanya-sihirbazi.js ve assets/js/kampanyalarim.js dosyalarına
+  taşındı. Sayfalarda bunları yükleyen defer script etiketleri kullanılıyor.
+  Sayfalar arasında taşınacak tekrarlı kod bulunmadığından ortak.js
+  oluşturulmadı.
+- tema/panel/kampanya-sihirbazi.php içindeki style="display: none;",
+  erişilebilir hidden niteliğiyle değiştirildi. Konum seçeneği ve dinamik
+  işlem düğmelerindeki sabit görsel kurallar tema/css/panel.css içindeki
+  .location-selection-option ve .button-spaced sınıflarına taşındı.
+  tema/, assets/ ve index.php altında başka HTML inline style= veya <style>
+  kullanımı bulunmadı.
+- **Proje durumu: BİTTİ (Google Ads).** Google Ads geliştirme kapsamı tamamlandı;
+  bu işaret gelecekte bakım veya iyileştirme yapılmasını engellemez. Meta Ads,
+  ayrı bir sonraki geliştirme fazı olarak ele alınabilir.
+- **Kort için canlı regresyon testi:** Deploy sonrası anasayfa,
+  kampanya-sihirbazi, kampanyalarim ve hesap-baglan sayfalarını dikkatle
+  yeniden test edin: OAuth başlatma/hesap seçimi, AI önerisi ve konum seçimli
+  kampanya oluşturma, bitiş tarihi güncelleme ile yayına al/duraklat/kaldır
+  onay akışları aynı davranmalıdır.
 
 ### 2026-09-21 — Kampanya bitiş tarihi güncelleme
 
@@ -26,7 +49,7 @@ GitHub: https://github.com/korthaci/ads_oauth
   `end_date_time` update maskesiyle gönderilir.
 - Sentetik test: `tests/kampanya-bitis-tarihi-testi.php`.
 
-**Proje durumu:** **AKTİF** — Kapsam netleşti (kişisel kullanım + davetli 1-2 kişi),
+**Proje durumu:** **BİTTİ (Google Ads)** — Kapsam netleşti (kişisel kullanım + davetli 1-2 kişi),
 Manager üzerinden hesap oluşturma yaklaşımı terk edildi, kullanıcı kendi hesabını
 kendisi bağlayacak şekilde ilerliyor. Google Ads API erişim seviyesi şu anda **BASIC**
 (günlük 15.000 işlem, production ve test hesapları için); OAuth Brand Verification ve
